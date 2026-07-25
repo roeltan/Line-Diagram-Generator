@@ -429,10 +429,14 @@ function buildDiagram(cfg){
 
     if (cfg.layout === "loop"){
       /* shoot out radially, then turn to run parallel with the loop's own
-         left-to-right station order, continuing away from the loop's
-         horizontal centre so it doesn't overlap the loop itself */
+         left-to-right station order. Default growth direction matches
+         which way the trunk itself continues from the junction, so the
+         branch reads as a second row alongside the trunk instead of
+         doubling back over the loop's own end-cap curve. */
       const sgn = jn.ny < 0 ? -1 : 1;
-      const turnDir = b.grow ? (b.grow === "left" ? -1 : 1) : (jn.x < loopW / 2 ? -1 : 1);
+      const trunkNeighbour = j + 1 < trunkCount ? nodes[j + 1] : nodes[j - 1];
+      const trunkDir = trunkNeighbour ? (trunkNeighbour.x >= jn.x ? 1 : -1) : 1;
+      const turnDir = b.grow ? (b.grow === "left" ? -1 : 1) : trunkDir;
       const by = jn.y + sgn * gap;
       const x1 = jn.x + turnDir * run;
       b.stations.forEach((st, i) => {
