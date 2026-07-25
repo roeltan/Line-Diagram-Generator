@@ -7,6 +7,12 @@ lines, auto-coloured interchange codes, and a legend. Export to SVG, PNG, or JSO
 
 No build step — open `index.html` directly in a browser.
 
+Undo/redo (↶/↷ in the header, or Ctrl+Z / Ctrl+Y) covers the whole diagram —
+every field, preset switch, and editor action — not just the station list.
+It's debounced, so a burst of typing collapses into one undo step. While a
+text field has focus, Ctrl+Z/Ctrl+Y is left alone so the field's own native
+undo still works as expected.
+
 ## Structure
 
 - `index.html` — page shell

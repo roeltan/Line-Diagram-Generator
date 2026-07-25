@@ -56,6 +56,7 @@
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   button.primary:hover{filter:brightness(1.08);color:#fff}
   button.icon{padding:6px 10px;font-variant-numeric:tabular-nums}
+  button.icon:disabled{opacity:.35;cursor:default;border-color:var(--border);color:inherit}
   .swatches{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
   .sw{width:22px;height:22px;border-radius:5px;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0}
   .sw:hover{transform:scale(1.12)}

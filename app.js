@@ -1689,6 +1689,7 @@ function render(){
     (nBranch ? ` + ${nBranch} on ${cfg.branches.length} branch${cfg.branches.length === 1 ? "" : "es"}` : "");
   showErrors(errs);
   save();
+  pushHistory();
 }
 
 function showErrors(list){
@@ -1829,17 +1830,81 @@ $("fileInput").onchange = e => {
 
 /* --------------------------------------------------------------- persistence */
 const KEY = "lineDiagramGenerator.v1";
-function save(){
-  try {
-    localStorage.setItem(KEY, JSON.stringify({
-      name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
-      spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
-      showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-      showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
-      lineInfo:LINE_INFO
-    }));
-  } catch (e){ /* storage disabled — no problem */ }
+function snapshotConfig(){
+  return {
+    name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
+    spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
+    showCodes:S.showCodes.checked, showIc:S.showIc.checked,
+    showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
+    lineInfo:LINE_INFO
+  };
 }
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(snapshotConfig())); }
+  catch (e){ /* storage disabled — no problem */ }
+}
+
+/* -------------------------------------------------------------- undo/redo */
+/* History is a stack of full-config snapshots (same shape as `save()`
+   persists), captured on a short debounce after render() so a burst of
+   edits (typing, dragging) collapses into one undo step instead of one
+   per keystroke. isRestoring guards against an undo/redo's own render()
+   call feeding straight back into history. */
+let undoStack = [], redoStack = [];
+let lastSnapshot = null;
+let isRestoring = false;
+let historyTimer = null;
+const HISTORY_DEBOUNCE = 500;
+const HISTORY_LIMIT = 200;
+
+function updateUndoRedoButtons(){
+  $("undoBtn").disabled = undoStack.length === 0;
+  $("redoBtn").disabled = redoStack.length === 0;
+}
+function pushHistory(){
+  clearTimeout(historyTimer);
+  if (isRestoring) return;
+  historyTimer = setTimeout(() => {
+    const snap = JSON.stringify(snapshotConfig());
+    if (lastSnapshot === null){ lastSnapshot = snap; return; }   // first call just sets the baseline
+    if (snap === lastSnapshot) return;
+    undoStack.push(lastSnapshot);
+    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+    lastSnapshot = snap;
+    redoStack = [];
+    updateUndoRedoButtons();
+  }, HISTORY_DEBOUNCE);
+}
+function restoreSnapshot(json){
+  isRestoring = true;
+  applyConfig(JSON.parse(json));
+  isRestoring = false;
+  updateUndoRedoButtons();
+}
+function undo(){
+  if (!undoStack.length) return;
+  clearTimeout(historyTimer);   // drop any not-yet-committed pending edit
+  redoStack.push(lastSnapshot);
+  lastSnapshot = undoStack.pop();
+  restoreSnapshot(lastSnapshot);
+}
+function redo(){
+  if (!redoStack.length) return;
+  clearTimeout(historyTimer);
+  undoStack.push(lastSnapshot);
+  lastSnapshot = redoStack.pop();
+  restoreSnapshot(lastSnapshot);
+}
+$("undoBtn").onclick = undo;
+$("redoBtn").onclick = redo;
+document.addEventListener("keydown", e => {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;   // let the field's own undo happen
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey){ e.preventDefault(); undo(); }
+  else if (k === "y" || (k === "z" && e.shiftKey)){ e.preventDefault(); redo(); }
+});
 
 /* ------------------------------------------------------------------- wiring */
 SWATCHES.forEach(c => {
