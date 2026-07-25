@@ -62,6 +62,9 @@ Direction is `up`/`down` for horizontal layouts, `left`/`right` for vertical, an
 ignored for loops (a branch always points straight out from the loop). Add
 `: #hexcolour` at the end of the header to override the branch's colour.
 
+**Branch spacing**, next to station spacing in the Layout section, controls
+how far a branch's line sits from the trunk it splits off from.
+
 The **Editor** view (default) gives you a row-based UI for all of this — add/
 reorder/delete stations and branches without touching text. Switch to **Text**
 to paste/edit the raw syntax directly, or to copy it out.

@@ -478,7 +478,7 @@ function buildDiagram(cfg){
     }
     const jn = nodes[j];
     const bc = b.colour || colour;
-    const gap = cfg.layout === "vertical" ? Math.max(sp * 2.5, 240) : Math.max(sp * 1.25, 120);
+    const gap = cfg.branchSpacing || BRANCH_SPACING_DEFAULT[cfg.layout] || 120;
     const run = Math.max(sp * 1.6, 130);   // length of the smooth curve / straight run near the junction
     const shuttle = b.mode === "shuttle";
     const F = v => v.toFixed(2);
@@ -824,7 +824,7 @@ function buildDiagram(cfg){
 const $ = id => document.getElementById(id);
 const S = {
   spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
-  hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"),
+  hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"), branchSpacing:$("branchSpacing"),
   closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"),
   showBadge:$("showBadge"), opaque:$("opaque")
 };
@@ -836,18 +836,31 @@ let diagramDark = false;   // the diagram's own light/dark background, independe
 const SPACING_PRESETS = { horizontal:[60,80,100], loop:[60,80,100], vertical:[40,60,80] };
 const SPACING_DEFAULT = { horizontal:60, vertical:40, loop:100 };
 
-function renderSpacingButtons(){
-  const list = SPACING_PRESETS[S.layout.value] || SPACING_PRESETS.horizontal;
-  const row = $("spacingRow");
+/* Branch spacing: how far a branch's line sits from the trunk it splits
+   off from. Same idea as station spacing, just perpendicular to the
+   trunk rather than along it — vertical layouts need more room since the
+   branch runs alongside station-name text. */
+const BRANCH_SPACING_PRESETS = { horizontal:[90,120,150], loop:[90,120,150], vertical:[180,240,300] };
+const BRANCH_SPACING_DEFAULT = { horizontal:120, vertical:240, loop:120 };
+
+function renderPresetButtons(row, list, field, onPick){
   row.innerHTML = "";
   list.forEach(v => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "spacingBtn" + (String(v) === String(S.spacing.value) ? " active" : "");
+    b.className = "spacingBtn" + (String(v) === String(field.value) ? " active" : "");
     b.textContent = v;
-    b.onclick = () => { S.spacing.value = v; renderSpacingButtons(); render(); };
+    b.onclick = () => { field.value = v; onPick(); render(); };
     row.appendChild(b);
   });
+}
+function renderSpacingButtons(){
+  renderPresetButtons($("spacingRow"), SPACING_PRESETS[S.layout.value] || SPACING_PRESETS.horizontal,
+    S.spacing, renderSpacingButtons);
+}
+function renderBranchSpacingButtons(){
+  renderPresetButtons($("branchSpacingRow"), BRANCH_SPACING_PRESETS[S.layout.value] || BRANCH_SPACING_PRESETS.horizontal,
+    S.branchSpacing, renderBranchSpacingButtons);
 }
 
 /* The NS/EW/CC/... -> {name,colour,acr} table is user-editable at runtime:
@@ -1306,6 +1319,7 @@ function readForm(){
     name:S.name.value.trim(), code:S.code.value.trim().toUpperCase(),
     colour:S.colour.value, layout:S.layout.value,
     spacing:parseInt(S.spacing.value, 10) || 100,
+    branchSpacing:parseInt(S.branchSpacing.value, 10) || 120,
     closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
     showBadge:S.showBadge.checked, opaque:S.opaque.checked,
     dark: diagramDark,
@@ -1320,6 +1334,7 @@ function applyConfig(c){
   S.layout.value = c.layout || "horizontal";
   syncLayoutButtons();
   S.spacing.value = c.spacing || SPACING_DEFAULT[S.layout.value] || 100;
+  S.branchSpacing.value = c.branchSpacing || BRANCH_SPACING_DEFAULT[S.layout.value] || 120;
   S.closed.checked = c.closed !== false;
   S.showCodes.checked = c.showCodes !== false;
   S.showIc.checked = c.showIc !== false;
@@ -1353,6 +1368,7 @@ function syncVisibility(){
   $("closedField").style.display = l === "loop"  ? "" : "none";
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
   renderSpacingButtons();
+  renderBranchSpacingButtons();
 }
 
 function rotateLoop(dir){
@@ -1744,7 +1760,7 @@ function save(){
   try {
     localStorage.setItem(KEY, JSON.stringify({
       name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
-      spacing:S.spacing.value, closed:S.closed.checked,
+      spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
       showCodes:S.showCodes.checked, showIc:S.showIc.checked,
       showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
       lineInfo:LINE_INFO
@@ -1778,6 +1794,7 @@ function setLayout(v){
   S.layout.value = v;
   syncLayoutButtons();
   S.spacing.value = SPACING_DEFAULT[S.layout.value] || 100;
+  S.branchSpacing.value = BRANCH_SPACING_DEFAULT[S.layout.value] || 120;
   syncVisibility();
   if (mode === "editor") renderEditorRows();
   render(); fit();
