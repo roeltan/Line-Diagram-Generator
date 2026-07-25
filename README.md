@@ -70,5 +70,7 @@ the end of the header to override the branch's colour.
 how far a branch's line sits from the trunk it splits off from.
 
 The **Editor** view (default) gives you a row-based UI for all of this — add/
-reorder/delete stations and branches without touching text. Switch to **Text**
-to paste/edit the raw syntax directly, or to copy it out.
+reorder/delete stations and branches without touching text. The **⇅** button
+next to the Editor/Text toggle reverses the trunk's station order in place
+(handy for flipping which end a line reads from without retyping it). Switch
+to **Text** to paste/edit the raw syntax directly, or to copy it out.

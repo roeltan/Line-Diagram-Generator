@@ -1070,12 +1070,23 @@ CG2  Changi Airport`
   cc:{
     /* Circle Line Stage 6 (Keppel / Cantonment / Prince Edward Road) opened
        12 Jul 2026, closing the loop and renumbering the old Marina Bay spur
-       (CE1/CE2) into CC33/CC34. Trunk starts at Serangoon (CC13) and reads
-       in descending order (CC13→CC4→CC34→…→CC14→ back to CC13); Dhoby
-       Ghaut/Bras Basah/Esplanade (CC1-CC3) are a short spur off Promenade
-       (CC4) — a real example of a loop layout with a branch. */
+       (CE1/CE2) into CC33/CC34. Trunk starts at Haw Par Villa (CC25) and
+       reads CC25→CC24→…→CC4→CC34→…→CC26→ back to CC25; Dhoby Ghaut/Bras
+       Basah/Esplanade (CC1-CC3) are a short spur off Promenade (CC4) — a
+       real example of a loop layout with a branch. */
     name:"Circle Line", code:"CCL", colour:"#fa9e0d", layout:"loop", spacing:104, closed:true,
-    spec:`CC13 Serangoon          > NE12
+    spec:`CC25 Haw Par Villa
+CC24 Kent Ridge
+CC23 one-north
+CC22 Buona Vista        > EW21
+CC21 Holland Village
+CC20 Farrer Road
+CC19 Botanic Gardens    > DT9
+CC17 Caldecott          > TE9
+CC16 Marymount
+CC15 Bishan             > NS17
+CC14 Lorong Chuan
+CC13 Serangoon          > NE12
 CC12 Bartley
 CC11 Tai Seng
 CC10 MacPherson         > DT26
@@ -1094,19 +1105,8 @@ CC29 HarbourFront       > NE1, EW17
 CC28 Telok Blangah
 CC27 Labrador Park
 CC26 Pasir Panjang
-CC25 Haw Par Villa
-CC24 Kent Ridge
-CC23 one-north
-CC22 Buona Vista        > EW21
-CC21 Holland Village
-CC20 Farrer Road
-CC19 Botanic Gardens    > DT9
-CC17 Caldecott          > TE9
-CC16 Marymount
-CC15 Bishan             > NS17
-CC14 Lorong Chuan
 
-[branch from CC4]
+[branch from CC4 up]
 CC3  Esplanade
 CC2  Bras Basah
 CC1  Dhoby Ghaut        > NS24, NE6`
@@ -1439,6 +1439,15 @@ function rotateLoop(dir){
   if (live.trunk.length < 2) return;
   if (dir === "cw") live.trunk.push(live.trunk.shift());
   else live.trunk.unshift(live.trunk.pop());
+  syncTextFromLive();
+  if (mode === "editor") renderEditorRows();
+  render();
+}
+
+function reverseTrunkOrder(){
+  if (mode === "text") setLiveFromText(S.spec.value);   // pick up any unsynced text edits first
+  if (live.trunk.length < 2) return;
+  live.trunk.reverse();
   syncTextFromLive();
   if (mode === "editor") renderEditorRows();
   render();
@@ -1891,6 +1900,7 @@ $("modeEditorBtn").onclick = () => setMode("editor");
 $("modeTextBtn").onclick = () => setMode("text");
 $("loopRotateCw").onclick = () => rotateLoop("cw");
 $("loopRotateCcw").onclick = () => rotateLoop("ccw");
+$("reverseOrderBtn").onclick = reverseTrunkOrder;
 
 PRESET_GROUPS.forEach(group => {
   const label = document.createElement("div");
