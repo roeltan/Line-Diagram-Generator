@@ -69,7 +69,8 @@
   legend{display:none}
   .sect{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
         margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
-  .sect:first-child{margin-top:0;padding-top:0;border-top:0}
+  .sect:first-child, #presetRow + .sect{margin-top:0;padding-top:0;border-top:0}
+  .sect.sectRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.5}
   .hint code{background:color-mix(in srgb,var(--muted) 14%,transparent);padding:1px 4px;border-radius:4px;font-size:11.5px}
   #errors{margin:10px 0 0;padding:9px 11px;border-radius:7px;background:#fdecec;color:#a01d1d;
@@ -83,8 +84,12 @@
               color:var(--ink);font-size:13px;font-weight:600;text-align:center}
   .spacingBtn:hover{border-color:var(--accent)}
   .spacingBtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-  #stationCount{float:right;text-transform:none;letter-spacing:0;font-weight:450}
-  .presetRow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .stationCount{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+  .presetRow{margin-bottom:6px}
+  .presetGroupLabel{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+                     color:var(--muted);margin:10px 0 5px}
+  .presetGroupLabel:first-child{margin-top:0}
+  .presetGroupRow{display:flex;flex-wrap:wrap;gap:6px}
   .presetBtn{display:inline-flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;
              border:1px solid var(--border);border-radius:20px;background:var(--field);
              font-size:12px;font-weight:600;color:var(--ink)}
@@ -92,7 +97,7 @@
   .presetCap{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:19px;
              padding:0 6px;border-radius:9.5px;color:#fff;font-size:10px;font-weight:800;letter-spacing:.3px}
 
-  .modeToggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;float:right}
+  .modeToggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;flex:none}
   .modeBtn{border:0;border-radius:0;padding:4px 10px;font-size:11px;font-weight:700;text-transform:uppercase;
            letter-spacing:.04em;background:var(--field);color:var(--muted)}
   .modeBtn.active{background:var(--accent);color:#fff}
@@ -101,16 +106,16 @@
          border-radius:7px;padding:5px 6px}
   .stRow.dragging{opacity:.4}
   .stRow.dragover{border-color:var(--accent)}
-  .dragHandle{cursor:grab;color:var(--muted);font-size:13px;padding:0 2px;user-select:none;line-height:1}
-  .stRow input{border:1px solid transparent;background:transparent;color:var(--ink);padding:5px 6px;border-radius:5px;font-size:12.5px;width:auto}
+  .dragHandle{flex:none;cursor:grab;color:var(--muted);font-size:13px;padding:0 2px;user-select:none;line-height:1}
+  .stRow input{min-width:0;border:1px solid transparent;background:transparent;color:var(--ink);padding:5px 6px;border-radius:5px;font-size:12.5px}
   .stRow input:hover{border-color:var(--border)}
   .stRow input:focus{border-color:var(--accent);background:var(--panel);box-shadow:none}
-  .stCode{width:56px;flex:none;font-weight:650;text-transform:uppercase}
+  .stCode{width:44px;flex:none;font-weight:650;text-transform:uppercase}
   .stName{flex:1;min-width:0}
-  .stIcs{width:104px;flex:none;color:var(--muted)}
-  .rowDel{flex:none;border:0;background:transparent;color:var(--muted);font-size:14px;padding:2px 5px;
-          line-height:1;border-radius:5px}
-  .rowDel:hover{color:#c0392b;background:color-mix(in srgb,#c0392b 12%,transparent)}
+  .stIcs{width:90px;flex:none;color:var(--muted)}
+  .rowDel{flex:none;border:0;background:var(--border);color:var(--ink);font-size:13px;width:22px;height:22px;
+          line-height:1;border-radius:50%;padding:0}
+  .rowDel:hover{color:#fff;background:#c0392b}
   .addBtn{width:100%;padding:7px;border:1px dashed var(--border);border-radius:7px;background:transparent;
           color:var(--muted);font-size:12.5px;margin-bottom:14px}
   .addBtn:hover{border-color:var(--accent);color:var(--accent);border-style:solid}
@@ -120,6 +125,13 @@
   .branchHead select{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--field);
                       font-size:12px;color:var(--ink);width:auto}
   .branchHead input[type=color]{width:32px;height:30px;padding:2px}
+  .branchOpts{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:-2px 0 8px}
+  .branchOpts .chk{margin:0}
+  .brShuttleLabel{width:130px;flex:none;padding:6px 8px;border:1px solid var(--border);border-radius:6px;
+                   background:var(--field);color:var(--ink);font-size:12px}
+  .brCurve{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--field);
+           font-size:12px;color:var(--ink);width:auto}
+  .brCurve:disabled{opacity:.5}
   .branchDel{flex:none;border:1px solid var(--border);border-radius:6px;background:var(--field);
              color:var(--muted);padding:5px 8px;font-size:11px}
   .branchDel:hover{color:#c0392b;border-color:#c0392b}

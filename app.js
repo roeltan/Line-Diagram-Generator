@@ -61,6 +61,24 @@ const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Int
 
 /* Rough text width; good enough for bounding boxes and label offsets. */
 const measure = (t, size) => (t ? t.length * size * 0.565 : 0);
+
+/* Splits a long name into two roughly-balanced lines at a word boundary
+   (used for loop-layout station names, which read horizontally centred and
+   would otherwise run into neighbouring stations). Returns [name] unchanged
+   if it's short enough or has no word boundary to split at. */
+function wrapName(name, threshold){
+  if (!name || name.length <= threshold) return [name];
+  const words = name.split(" ");
+  if (words.length < 2) return [name];
+  let best = 1, bestDiff = Infinity;
+  for (let i = 1; i < words.length; i++){
+    const l1 = words.slice(0, i).join(" ").length;
+    const l2 = words.slice(i).join(" ").length;
+    const diff = Math.abs(l1 - l2);
+    if (diff < bestDiff){ bestDiff = diff; best = i; }
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
 /* All codes up to 4 chars share one uniform caplet width (as if every code
    were 4 chars) so e.g. EW7 and EW23 render the same size; only longer
    strings (used for legend acronyms like BPLRT) grow past that. */
@@ -99,15 +117,54 @@ function parseSpec(text){
     const s = raw.trim();
     if (!s || s.startsWith("#") || s.startsWith("//")) return;
     if (s.startsWith("[")){
-      const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(up|down|left|right)?\s*(?::\s*(.*?))?\s*\]$/i.exec(s);
+      const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(s);
       if (!m){
-        errors.push(`Line ${i+1}: expected <code>[branch from CODE up: Name]</code>`);
+        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code>`);
         return;
       }
-      let name = (m[3] || "").trim(), colour = null;
-      const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(name);
-      if (cm){ colour = cm[1]; name = name.slice(0, cm.index).trim(); }
-      const b = { from:m[1], dir:(m[2]||"").toLowerCase(), name, colour, stations:[], line:i+1 };
+      const from = m[1];
+      let rest = m[2];
+
+      /* everything after the first ':' is optional colour override */
+      let colour = null;
+      const colonIdx = rest.indexOf(":");
+      if (colonIdx >= 0){
+        let tail = rest.slice(colonIdx + 1).trim();
+        rest = rest.slice(0, colonIdx).trim();
+        const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(tail);
+        if (cm) colour = cm[1];
+      }
+
+      /* remaining space-separated keywords, order-independent. up/down and
+         left/right are captured separately since a horizontal/loop branch
+         can use both at once: up/down as which side of the trunk it sits
+         on, left/right as which way its own stations grow. */
+      const DIRS_UD = ["up", "down"];
+      const DIRS_LR = ["left", "right"];
+      const DIRS = [...DIRS_UD, ...DIRS_LR];
+      const tokens = rest.split(/\s+/).filter(Boolean);
+      let dirUD = "", dirLR = "", mode = "split", shuttleLabel = "", curve = "smooth";
+      for (let ti = 0; ti < tokens.length; ti++){
+        const t = tokens[ti].toLowerCase();
+        if (DIRS_UD.includes(t)) dirUD = t;
+        else if (DIRS_LR.includes(t)) dirLR = t;
+        else if (t === "shuttle"){
+          mode = "shuttle";
+          const next = tokens[ti + 1];
+          if (next && !DIRS.includes(next.toLowerCase()) &&
+              !["orthogonal", "ortho", "smooth", "curvy", "curve"].includes(next.toLowerCase())){
+            shuttleLabel = next;
+            ti++;
+          }
+        }
+        else if (t === "orthogonal" || t === "ortho") curve = "orthogonal";
+        else if (t === "smooth" || t === "curvy" || t === "curve") curve = "smooth";
+      }
+      const dir = dirUD || dirLR;   // which side: up/down (horizontal), left/right (vertical)
+      const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
+
+      if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
+      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
       return;
@@ -285,16 +342,25 @@ function buildDiagram(cfg){
   const DIAG  = { nameRot:-45, nameAnchor:"start", nameDX:0, nameDY:-13, codeDir:[0,1] };
   const RIGHT = { nameRot:0,   nameAnchor:"start",  codeDir:[1,0],  inline:true };
   const LEFT  = { nameRot:0,   nameAnchor:"end",    codeDir:[-1,0], inline:true };
-  const UP    = { nameRot:0,   nameAnchor:"middle", codeDir:[0,-1], inline:true };
-  const DOWN  = { nameRot:0,   nameAnchor:"middle", codeDir:[0,1],  inline:true };
+  /* Same growth direction as DIAG (codes down) but the name reads
+     horizontally, below the caplet family instead of diagonally above —
+     used at a junction whose branch goes up, so the name doesn't run
+     into the branch line's own path. */
+  const BELOW = { nameRot:0, nameAnchor:"middle", codeDir:[0,1], inline:true };
+  /* Loop stations always read name-above/codes-below, regardless of which
+     side of the loop they sit on — name position is a fixed clearance
+     above the caplet stack rather than growing with it. */
+  const LOOPLABEL = { nameRot:0, nameAnchor:"middle", nameDX:0, nameDY:-(STYLE.codeH/2 + 12), codeDir:[0,1] };
 
   let trunkPath = "";            // path 'd' for the trunk
   let loop = null;               // stadium geometry, when layout === 'loop'
+  let loopW = 0;                 // loop's full width, needed later for branch placement
 
   if (cfg.layout === "loop"){
     const n = Math.max(trunk.length, 2);
     const H = Math.max(sp * 2, 200);
     const W = (n * sp) / 2 + H;
+    loopW = W;
     loop = racetrack(0, 0, W, H, H / 2);
     const step = loop.straightTotal / n;
     /* No station sits on the semicircular end-caps, so nothing else would
@@ -306,7 +372,7 @@ function buildDiagram(cfg){
       const p = loop.atStraight(i * step);
       nodes.push({ ...st, x:p.x, y:p.y, nx:p.nx, ny:p.ny, colour,
                    kind: cfg.closed ? "" : (i === 0 || i === trunk.length-1 ? "term" : ""),
-                   label: p.ny < 0 ? UP : DOWN });
+                   label: LOOPLABEL });
     });
     trunkPath = cfg.closed
       ? loop.path(0, loop.total)
@@ -330,8 +396,12 @@ function buildDiagram(cfg){
   const trunkCount = nodes.length;
   el("path", { d:trunkPath, stroke:colour, "stroke-width":STYLE.lineWidth }, gLines);
 
-  /* ---- branches: smooth curve out of the trunk, then straight ---- */
+  /* ---- branches: smooth curve (or orthogonal turn) out of the trunk ---- */
   const warnings = [];
+  const drawBranchLine = (d, strokeColour, shuttle) => {
+    el("path", { d, stroke:strokeColour, "stroke-width":STYLE.lineWidth }, gLines);
+    if (shuttle) el("path", { d, stroke:bgColour, "stroke-width":2.5 }, gLines);
+  };
   branches.forEach(b => {
     if (!b.stations.length) return;
     const key = b.from.toUpperCase();
@@ -344,21 +414,39 @@ function buildDiagram(cfg){
     const jn = nodes[j];
     const bc = b.colour || colour;
     const gap = Math.max(sp * 1.25, 120);
-    const run = Math.max(sp * 1.6, 130);   // length of the smooth curve near the junction
+    const run = Math.max(sp * 1.6, 130);   // length of the smooth curve / straight run near the junction
+    const shuttle = b.mode === "shuttle";
     const F = v => v.toFixed(2);
 
+    /* shuttle mode: if a caplet label was explicitly given, the junction
+       becomes an "interchange" showing it as an extra caplet. Without one,
+       the junction just keeps its own code — some shuttles (e.g. Tengah)
+       aren't shown as an interchange at all in real life. */
+    if (shuttle){
+      const label = (b.shuttleLabel || "").trim();
+      if (label) jn.ics = [...jn.ics, label];
+    }
+
     if (cfg.layout === "loop"){
-      /* radial spur pointing away from the loop; own label flips inward */
-      jn.label = jn.label === UP ? DOWN : UP;
-      const side = jn.ny < 0 ? UP : DOWN;
+      /* shoot out radially, then turn to run parallel with the loop's own
+         left-to-right station order, continuing away from the loop's
+         horizontal centre so it doesn't overlap the loop itself */
+      const sgn = jn.ny < 0 ? -1 : 1;
+      const turnDir = b.grow ? (b.grow === "left" ? -1 : 1) : (jn.x < loopW / 2 ? -1 : 1);
+      const by = jn.y + sgn * gap;
+      const x1 = jn.x + turnDir * run;
       b.stations.forEach((st, i) => {
-        const d = gap + i * sp;
-        nodes.push({ ...st, x:jn.x + jn.nx * d, y:jn.y + jn.ny * d, colour:bc, label:side,
+        nodes.push({ ...st, x:x1 + turnDir * i * sp, y:by, colour:bc, label:LOOPLABEL,
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
       });
-      const lastD = gap + (b.stations.length-1) * sp;
-      el("path", { d:`M ${F(jn.x)} ${F(jn.y)} L ${F(jn.x + jn.nx*lastD)} ${F(jn.y + jn.ny*lastD)}`,
-                   stroke:bc, "stroke-width":STYLE.lineWidth }, gLines);
+      const lastX = x1 + turnDir * (b.stations.length-1) * sp;
+      const d = b.curve === "orthogonal"
+        ? roundedPath([[jn.x, jn.y], [jn.x, by], [lastX, by]], 56)
+        : (() => {
+            const c1x = jn.x, c1y = jn.y + sgn*run*0.6, c2x = x1 - turnDir*run*0.4;
+            return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(by)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
+          })();
+      drawBranchLine(d, bc, shuttle);
 
     } else if (cfg.layout === "vertical"){
       jn.label = (b.dir === "left") ? RIGHT : LEFT;
@@ -371,23 +459,32 @@ function buildDiagram(cfg){
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
       });
       const lastY = y1 + (b.stations.length-1)*sp;
-      const c1y = jn.y + run*0.6, c2y = y1 - run*0.4;
-      el("path", { d:`M ${F(jn.x)} ${F(jn.y)} C ${F(jn.x)} ${F(c1y)}, ${F(bx)} ${F(c2y)}, ${F(bx)} ${F(y1)} L ${F(bx)} ${F(lastY)}`,
-                   stroke:bc, "stroke-width":STYLE.lineWidth }, gLines);
+      const d = b.curve === "orthogonal"
+        ? roundedPath([[jn.x, jn.y], [bx, jn.y], [bx, lastY]], 56)
+        : (() => {
+            const c1y = jn.y + run*0.6, c2y = y1 - run*0.4;
+            return `M ${F(jn.x)} ${F(jn.y)} C ${F(jn.x)} ${F(c1y)}, ${F(bx)} ${F(c2y)}, ${F(bx)} ${F(y1)} L ${F(bx)} ${F(lastY)}`;
+          })();
+      drawBranchLine(d, bc, shuttle);
 
     } else { /* horizontal */
-      jn.label = (b.dir === "up") ? DOWN : UP;
+      if (b.dir === "up") jn.label = BELOW;   // keep the name clear of the branch line above
       const sgn = b.dir === "up" ? -1 : 1;
+      const growSgn = b.grow === "left" ? -1 : 1;
       const by = jn.y + sgn * gap;
-      const x1 = jn.x + run;
+      const x1 = jn.x + growSgn * run;
       b.stations.forEach((st, i) => {
-        nodes.push({ ...st, x:x1 + i * sp, y:by, colour:bc, label:DIAG,
+        nodes.push({ ...st, x:x1 + growSgn * i * sp, y:by, colour:bc, label:DIAG,
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
       });
-      const lastX = x1 + (b.stations.length-1)*sp;
-      const c1x = jn.x + run*0.6, c2x = x1 - run*0.4;
-      el("path", { d:`M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`,
-                   stroke:bc, "stroke-width":STYLE.lineWidth }, gLines);
+      const lastX = x1 + growSgn * (b.stations.length-1)*sp;
+      const d = b.curve === "orthogonal"
+        ? roundedPath([[jn.x, jn.y], [jn.x, by], [lastX, by]], 56)
+        : (() => {
+            const c1x = jn.x + growSgn*run*0.6, c2x = x1 - growSgn*run*0.4;
+            return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
+          })();
+      drawBranchLine(d, bc, shuttle);
     }
   });
 
@@ -479,16 +576,26 @@ function buildDiagram(cfg){
         nx = n.x + (L.nameDX || 0);
         ny = n.y + (L.nameDY || 0);
       }
-      const t = el("text", {
-        x:F2(nx), y:F2(ny),
-        "text-anchor":L.nameAnchor,
-        "font-size":STYLE.nameSize,
-        "font-weight":STYLE.nameWeight,
-        fill:textColour,
-        transform: L.nameRot ? `rotate(${L.nameRot} ${F2(nx)} ${F2(ny)})` : null
-      }, gLabels);
-      t.textContent = n.name;
-      bb.text(nx, ny, n.name, STYLE.nameSize, L.nameRot, L.nameAnchor);
+
+      /* Loop names read horizontally and can run into neighbouring
+         stations, so long ones wrap onto two lines, stacked upward from
+         the usual single-line position (name always sits above the
+         caplet in loop layout). */
+      const lines = cfg.layout === "loop" ? wrapName(n.name, 12) : [n.name];
+      const lineHeight = STYLE.nameSize * 1.15;
+      lines.forEach((lineText, li) => {
+        const ly = ny - (lines.length - 1 - li) * lineHeight;
+        const t = el("text", {
+          x:F2(nx), y:F2(ly),
+          "text-anchor":L.nameAnchor,
+          "font-size":STYLE.nameSize,
+          "font-weight":STYLE.nameWeight,
+          fill:textColour,
+          transform: L.nameRot ? `rotate(${L.nameRot} ${F2(nx)} ${F2(ly)})` : null
+        }, gLabels);
+        t.textContent = lineText;
+        bb.text(nx, ly, lineText, STYLE.nameSize, L.nameRot, L.nameAnchor);
+      });
     }
 
     /* no code to show at all (rare) — a small tick stands in for a marker */
@@ -619,16 +726,30 @@ function renderSpacingButtons(){
 }
 
 /* Preset picker metadata — drives the little coloured line-acronym caplets
-   shown under the Stations header. `key` looks up EXAMPLES. */
-const PRESET_META = [
-  { key:"ns",  acr:"NSL", label:"North South Line",  colour:"#d42e12" },
-  { key:"ew",  acr:"EWL", label:"East West Line",     colour:"#009645" },
-  { key:"cc",  acr:"CCL", label:"Circle Line",        colour:"#fa9e0d" },
-  { key:"ne",  acr:"NEL", label:"North East Line",    colour:"#9900aa" },
-  { key:"dt",  acr:"DTL", label:"Downtown Line",      colour:"#005ec4" },
-  { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa" },
-  { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
-  { key:"blank", acr:"—", label:"Blank template",     colour:"#8a9099" }
+   at the top of the sidebar. `key` looks up EXAMPLES. Grouped into the
+   categories LTA/operators actually use: Current (open today), Future
+   (under construction, dated), and Proposed (advocacy/concept lines —
+   e.g. the Singapore Transport Collective's Transport Manifesto 50 —
+   added once that data is provided). */
+const PRESET_GROUPS = [
+  { name:"Current", items:[
+    { key:"ns", acr:"NSL", label:"North South Line",  colour:"#d42e12" },
+    { key:"ew", acr:"EWL", label:"East West Line",     colour:"#009645" },
+    { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d" },
+    { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa" },
+    { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4" },
+    { key:"te", acr:"TEL", label:"Thomson-East Coast Line", colour:"#9d5b25" },
+  ]},
+  { name:"Future", items:[
+    { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa" },
+    { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
+  ]},
+  { name:"Proposed", items:[
+    { key:"stl", acr:"STL", label:"Seletar-Tengah Line (speculative)", colour:"#00a1de" },
+  ]},
+  { name:"Other", items:[
+    { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099" }
+  ]}
 ];
 
 const EXAMPLES = {
@@ -698,7 +819,7 @@ EW31 Tuas Crescent
 EW32 Tuas West Road
 EW33 Tuas Link
 
-[branch from EW4 down]
+[branch from EW4 down shuttle CG]
 CG1  Expo               > DT35
 CG2  Changi Airport`
   },
@@ -802,6 +923,59 @@ DT33 Tampines East
 DT34 Upper Changi
 DT35 Expo               > CG1`
   },
+  te:{
+    name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal", spacing:100,
+    spec:`TE1  Woodlands North
+TE2  Woodlands          > NS9
+TE3  Woodlands South
+TE4  Springleaf
+TE5  Lentor
+TE6  Mayflower
+TE7  Bright Hill
+TE8  Upper Thomson
+TE9  Caldecott          > CC17
+TE11 Stevens            > DT10
+TE12 Napier
+TE13 Orchard Boulevard
+TE14 Orchard            > NS22
+TE15 Great World
+TE16 Havelock
+TE17 Outram Park        > EW16, NE3
+TE18 Maxwell
+TE19 Shenton Way
+TE20 Marina Bay         > NS27, CC33
+TE22 Gardens by the Bay
+TE23 Founders' Memorial
+TE24 Tanjong Rhu
+TE25 Katong Park
+TE26 Tanjong Katong
+TE27 Marine Parade
+TE28 Marine Terrace
+TE29 Siglap
+TE30 Bayshore
+TE31 Bedok South
+TE32 Sungei Bedok`
+  },
+  stl:{
+    /* SPECULATIVE / preliminary template — the Seletar-Tengah Line is not
+       an official LTA project. Sketched per a request to fill in a rough,
+       plausible north-central alignment linking Seletar to Tengah, pending
+       more specific detail (e.g. from the Singapore Transport Collective's
+       "Transport Manifesto 50"). Treat every station here as a placeholder
+       to be replaced once real/more considered alignment info is given. */
+    name:"Seletar-Tengah Line", code:"STL", colour:"#00a1de", layout:"horizontal", spacing:100,
+    spec:`# SPECULATIVE preliminary sketch, not an official LTA line — replace freely
+ST1  Seletar Aerospace Park
+ST2  Seletar
+ST3  Fernvale            > STC
+ST4  Sengkang West
+ST5  Yishun              > NS13
+ST6  Springleaf          > TE4
+ST7  Lentor              > TE5
+ST8  Bukit Panjang       > DT1, BP6
+ST9  Hillview            > DT3
+ST10 Tengah              > JS3`
+  },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
        JS is the trunk; JW (NTU spur) branches off Bahar Junction (JS7),
@@ -822,14 +996,14 @@ JS10 Tukang
 JS11 Jurong Hill
 JS12 Jurong Pier
 
-[branch from JS7 down]
+[branch from JS7 down orthogonal]
 JW1  Gek Poh
 JW2  Tawas
 JW3  Nanyang Gateway
 JW4  Nanyang Crescent
 JW5  Peng Kang Hill
 
-[branch from JS3 up]
+[branch from JS3 up shuttle]
 JE1  Tengah Plantation
 JE2  Tengah Park
 JE3  Bukit Batok West
@@ -856,7 +1030,7 @@ CR11 Ang Mo Kio          > NS16
 CR12 Teck Ghee
 CR13 Bright Hill         > TE
 
-[branch from CR5 down]
+[branch from CR5 down shuttle CP1]
 CP2  Elias
 CP3  Riviera             > PE4
 CP4  Punggol             > NE17, PTC`
@@ -898,6 +1072,9 @@ function stLineText(st){
 function branchHeaderText(b){
   let s = `[branch from ${b.from || "?"}`;
   if (b.dir) s += ` ${b.dir}`;
+  if (b.grow && b.grow !== b.dir) s += ` ${b.grow}`;
+  if (b.mode === "shuttle") s += ` shuttle${b.shuttleLabel ? " " + b.shuttleLabel : ""}`;
+  if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.colour) s += `: ${b.colour}`;
   return s + "]";
 }
@@ -1074,6 +1251,15 @@ function makeBranchBlock(b, bIdx){
     head.appendChild(dirSel);
   }
 
+  if (layoutVal !== "vertical"){
+    const growSel = document.createElement("select");
+    growSel.className = "brGrow";
+    growSel.innerHTML = `<option value="right">grows right</option><option value="left">grows left</option>`;
+    growSel.value = b.grow === "left" ? "left" : "right";
+    growSel.onchange = () => { b.grow = growSel.value; syncTextFromLive(); render(); };
+    head.appendChild(growSel);
+  }
+
   const colourInp = document.createElement("input");
   colourInp.type = "color"; colourInp.title = "Branch colour override";
   colourInp.value = b.colour || S.colour.value;
@@ -1086,6 +1272,44 @@ function makeBranchBlock(b, bIdx){
   head.appendChild(delBtn);
 
   wrap.appendChild(head);
+
+  /* shuttle mode + curve style ------------------------------------------ */
+  const opts = document.createElement("div");
+  opts.className = "branchOpts";
+
+  const shuttleChk = document.createElement("label");
+  shuttleChk.className = "chk";
+  const shuttleCb = document.createElement("input");
+  shuttleCb.type = "checkbox"; shuttleCb.checked = b.mode === "shuttle";
+  shuttleChk.appendChild(shuttleCb);
+  shuttleChk.appendChild(document.createTextNode(" Shuttle"));
+  opts.appendChild(shuttleChk);
+
+  const labelInp = document.createElement("input");
+  labelInp.type = "text"; labelInp.className = "brShuttleLabel";
+  labelInp.placeholder = "Caplet (e.g. CP1)";
+  labelInp.value = b.shuttleLabel || "";
+  labelInp.style.display = b.mode === "shuttle" ? "" : "none";
+  labelInp.oninput = () => { b.shuttleLabel = labelInp.value.trim(); syncTextFromLive(); render(); };
+  opts.appendChild(labelInp);
+
+  const curveSel = document.createElement("select");
+  curveSel.className = "brCurve";
+  curveSel.innerHTML = `<option value="smooth">Smooth curve</option><option value="orthogonal">Orthogonal turn</option>`;
+  curveSel.value = b.curve || "smooth";
+  curveSel.disabled = b.mode === "shuttle";
+  curveSel.onchange = () => { b.curve = curveSel.value; syncTextFromLive(); render(); };
+  opts.appendChild(curveSel);
+
+  shuttleCb.onchange = () => {
+    b.mode = shuttleCb.checked ? "shuttle" : "split";
+    if (b.mode === "shuttle") b.curve = "orthogonal";
+    labelInp.style.display = shuttleCb.checked ? "" : "none";
+    curveSel.disabled = shuttleCb.checked;
+    curveSel.value = b.curve || "smooth";
+    syncTextFromLive(); render();
+  };
+  wrap.appendChild(opts);
 
   const rows = document.createElement("div");
   rows.className = "rowList branchRows";
@@ -1319,15 +1543,25 @@ $("addBranchBtn").onclick = () => {
 $("modeEditorBtn").onclick = () => setMode("editor");
 $("modeTextBtn").onclick = () => setMode("text");
 
-PRESET_META.forEach(p => {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "presetBtn"; b.title = p.label;
-  const cap = document.createElement("span");
-  cap.className = "presetCap"; cap.style.background = p.colour; cap.textContent = p.acr;
-  b.appendChild(cap);
-  b.appendChild(document.createTextNode(p.label));
-  b.onclick = () => { const ex = EXAMPLES[p.key]; if (ex) applyConfig(ex); };
-  $("presetRow").appendChild(b);
+PRESET_GROUPS.forEach(group => {
+  const label = document.createElement("div");
+  label.className = "presetGroupLabel";
+  label.textContent = group.name;
+  $("presetRow").appendChild(label);
+
+  const row = document.createElement("div");
+  row.className = "presetGroupRow";
+  group.items.forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "presetBtn"; b.title = p.label;
+    const cap = document.createElement("span");
+    cap.className = "presetCap"; cap.style.background = p.colour; cap.textContent = p.acr;
+    b.appendChild(cap);
+    b.appendChild(document.createTextNode(p.label));
+    b.onclick = () => { const ex = EXAMPLES[p.key]; if (ex) applyConfig(ex); };
+    row.appendChild(b);
+  });
+  $("presetRow").appendChild(row);
 });
 
 $("zoomIn").onclick  = () => setZoom(zoom * 1.25);

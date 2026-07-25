@@ -28,6 +28,8 @@
 
 <div class="layout">
   <aside>
+    <div id="presetRow" class="presetRow"></div>
+
     <div class="sect">Line</div>
     <div class="field">
       <label for="lineName">Line name</label>
@@ -77,12 +79,13 @@
       <label class="chk"><input type="checkbox" id="opaque" checked> Opaque background (for PNG export)</label>
     </div>
 
-    <div class="sect">Stations <span id="stationCount"></span>
+    <div class="sect sectRow">
+      <span>Stations</span>
       <span class="modeToggle">
         <button type="button" class="modeBtn active" id="modeEditorBtn">Editor</button><button type="button" class="modeBtn" id="modeTextBtn">Text</button>
       </span>
     </div>
-    <div id="presetRow" class="presetRow"></div>
+    <div id="stationCount" class="stationCount"></div>
 
     <div id="editorView">
       <div id="trunkRows" class="rowList"></div>
