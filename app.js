@@ -41,10 +41,10 @@ function colourForCode(code, fallback){
 
 /* ------------------------------------------------------------------- style */
 const STYLE = {
-  lineWidth:11,
+  lineWidth:6,
   icStroke:"#33383d",
   nameSize:14, nameWeight:600, nameFill:"#1b1f24",
-  codeSize:10.5, codeH:18, codeGap:14,
+  codeSize:10.5, codeH:20, codeGap:14,
   capletOutline:"#ffffff", capletOutlineW:2
 };
 const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif';
@@ -54,8 +54,8 @@ const measure = (t, size) => (t ? t.length * size * 0.565 : 0);
 /* All codes up to 4 chars share one uniform caplet width (as if every code
    were 4 chars) so e.g. EW7 and EW23 render the same size; only longer
    strings (used for legend acronyms like BPLRT) grow past that. */
-const CODE_BOX_W_MIN = 4 * 7.6 + 14;
-const codeBoxW = t => Math.max(CODE_BOX_W_MIN, t.length * 7.6 + 14);
+const CODE_BOX_W_MIN = 4 * 6.6 + 11;
+const codeBoxW = t => Math.max(CODE_BOX_W_MIN, t.length * 6.6 + 11);
 
 /* ------------------------------------------------------------------ parsing */
 function parseStation(s){
