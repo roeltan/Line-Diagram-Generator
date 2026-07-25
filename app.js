@@ -745,7 +745,7 @@ const PRESET_GROUPS = [
     { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
   ]},
   { name:"Proposed", items:[
-    { key:"stl", acr:"STL", label:"Seletar-Tengah Line (speculative)", colour:"#00a1de" },
+    { key:"stl", acr:"STL", label:"Seletar-Tengah Line (speculative)", colour:"#e8467c" },
   ]},
   { name:"Other", items:[
     { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099" }
@@ -963,7 +963,7 @@ TE32 Sungei Bedok`
        more specific detail (e.g. from the Singapore Transport Collective's
        "Transport Manifesto 50"). Treat every station here as a placeholder
        to be replaced once real/more considered alignment info is given. */
-    name:"Seletar-Tengah Line", code:"STL", colour:"#00a1de", layout:"horizontal", spacing:100,
+    name:"Seletar-Tengah Line", code:"STL", colour:"#e8467c", layout:"horizontal", spacing:100,
     spec:`# SPECULATIVE preliminary sketch, not an official LTA line — replace freely
 ST1  Seletar Aerospace Park
 ST2  Seletar
