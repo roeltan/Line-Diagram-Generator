@@ -52,12 +52,13 @@
 
     <div class="sect">Layout</div>
     <div class="field">
-      <label for="layout">Shape</label>
-      <select id="layout">
-        <option value="horizontal">Horizontal strip</option>
-        <option value="vertical">Vertical list</option>
-        <option value="loop">Loop</option>
-      </select>
+      <label>Shape</label>
+      <div class="spacingRow" id="layoutRow">
+        <button type="button" class="spacingBtn" data-value="horizontal">Horizontal</button>
+        <button type="button" class="spacingBtn" data-value="vertical">Vertical</button>
+        <button type="button" class="spacingBtn" data-value="loop">Loop</button>
+      </div>
+      <input type="hidden" id="layout" value="horizontal">
     </div>
     <div class="field">
       <label>Station spacing</label>
@@ -100,6 +101,9 @@
         <p class="hint">
           One station per line: <code>CODE  Station Name  &gt; IC1, IC2</code><br>
           Everything after <code>&gt;</code> is interchange codes (auto-coloured by prefix).
+          Add <code>*</code> right after a code (e.g. <code>DT11*</code>) to mark it as an
+          out-of-station interchange (dashed outline) — tap out and back in, like Newton,
+          Bukit Panjang or Tampines.
           Use <code>CODE | Name</code> if the name is ambiguous. <code>#</code> starts a comment.<br>
           Start a branch with a header line:<br>
           <code>[branch from CC4 up]</code><br>

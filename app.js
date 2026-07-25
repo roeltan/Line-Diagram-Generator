@@ -29,7 +29,7 @@ const LINE_INFO = {
   BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PG" },
-  RTS:{ name:"RTS Link", colour:"#6c5ce7", acr:"RTS" }
+  RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
@@ -226,6 +226,27 @@ function roundedPath(pts, r){
   return d;
 }
 
+/* A short thick bar between two out-of-station-interchange caplets, split
+   into two colours (matching each side) by a diagonal seam angled 30°
+   off square to the bar, rather than a plain straight cut. */
+function drawOsiConnector(el, parent, x0, y0, x1, y1, thickness, colourA, colourB){
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;      // unit vector along the bar
+  const px = -uy, py = ux;                 // unit vector across the bar
+  const halfT = thickness / 2;
+  const slant = halfT * Math.tan(Math.PI / 6);   // 30° off square
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const F2 = v => v.toFixed(2);
+  const top = [mx + px*halfT + ux*slant, my + py*halfT + uy*slant];
+  const bot = [mx - px*halfT - ux*slant, my - py*halfT - uy*slant];
+  const c0 = [x0 + px*halfT, y0 + py*halfT], c1 = [x0 - px*halfT, y0 - py*halfT];
+  const c2 = [x1 + px*halfT, y1 + py*halfT], c3 = [x1 - px*halfT, y1 - py*halfT];
+  const pts = p => p.map(q => `${F2(q[0])},${F2(q[1])}`).join(" ");
+  el("polygon", { points:pts([c0, top, bot, c1]), fill:colourA }, parent);
+  el("polygon", { points:pts([top, c2, c3, bot]), fill:colourB }, parent);
+}
+
 /* -------------------------------------------------------- stadium (loop) */
 /* Arc-length parameterised stadium/pill outline (two straight edges joined
    by semicircle end-caps — built as a degenerate rounded rect with
@@ -334,6 +355,8 @@ function buildDiagram(cfg){
   const bb = makeBBox();
   const F2 = v => v.toFixed(2);
   let clipCounter = 0;
+  const verticalLineXs = [0];       // x of every vertical line (trunk + branches), for centring
+  const branchSideCount = { "-1":0, "1":0 };   // spaces out multiple branches on the same side
 
   /* ---- resolve nodes: trunk positions per layout, then branches ---- */
   const nodes = [];   // {code,name,ics,x,y,kind,label}
@@ -414,7 +437,7 @@ function buildDiagram(cfg){
     }
     const jn = nodes[j];
     const bc = b.colour || colour;
-    const gap = Math.max(sp * 1.25, 120);
+    const gap = cfg.layout === "vertical" ? Math.max(sp * 2.5, 240) : Math.max(sp * 1.25, 120);
     const run = Math.max(sp * 1.6, 130);   // length of the smooth curve / straight run near the junction
     const shuttle = b.mode === "shuttle";
     const F = v => v.toFixed(2);
@@ -448,15 +471,22 @@ function buildDiagram(cfg){
       const d = b.curve === "orthogonal"
         ? roundedPath([[jn.x, jn.y], [jn.x, by], [lastX, by]], 56)
         : (() => {
-            const c1x = jn.x, c1y = jn.y + sgn*run*0.6, c2x = x1 - turnDir*run*0.4;
-            return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(by)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
+            /* both tangents stay horizontal (matching the loop's own
+               left-to-right reading direction) so the branch reads as a
+               smooth lane-change off the loop rather than a rounded
+               right-angle turn */
+            const c1x = jn.x + turnDir*run*0.6, c1y = jn.y;
+            const c2x = x1 - turnDir*run*0.4, c2y = by;
+            return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(c2y)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
           })();
       drawBranchLine(d, bc, shuttle);
 
     } else if (cfg.layout === "vertical"){
       jn.label = (b.dir === "left") ? RIGHT : LEFT;
       const sgn = b.dir === "left" ? -1 : 1;
-      const bx = jn.x + sgn * gap;
+      branchSideCount[sgn] = (branchSideCount[sgn] || 0) + 1;
+      const bx = jn.x + sgn * gap * branchSideCount[sgn];
+      verticalLineXs.push(bx);
       const y1 = jn.y + run;
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:bx, y:y1 + i * sp, colour:bc,
@@ -498,61 +528,89 @@ function buildDiagram(cfg){
     const L = n.label;
     const codes = [];
     if (cfg.showCodes && n.code) codes.push({ t:n.code, c:n.colour });
-    if (cfg.showIc) n.ics.forEach(c => codes.push({ t:c, c:colourForCode(c, n.colour) }));
+    if (cfg.showIc) n.ics.forEach(c => {
+      const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
+      const t = osi ? c.slice(0, -1) : c;
+      codes.push({ t, c:colourForCode(t, n.colour), osi });
+    });
 
     const dir = L.codeDir;
     const horiz = Math.abs(dir[0]) > Math.abs(dir[1]);
     const h = STYLE.codeH;
     let codesExtent = 0;
 
+    const OSI_GAP = 12;   // gap that stands an out-of-station code apart, bridged by a connector line
+
     if (codes.length && horiz){
-      /* Vertical layout: one merged pill, colour-banded per line, with a
-         thin divider between segments — the station's own code (codes[0])
+      /* Vertical layout: codes read left-to-right. A merged pill per
+         contiguous, colour-banded run — the station's own code (codes[0])
          sits centred straddling the line; interchange codes grow off the
-         opposite side from the station name so they never collide. */
+         opposite side from the station name so they never collide. An
+         out-of-station interchange breaks off into its own pill, joined
+         by a short connector line instead of touching directly. */
       const widths = codes.map(cd => codeBoxW(cd.t));
       const w0 = widths[0];
       const growDir = -dir[0];   // grow opposite the name's side
       const segs = [{ cd:codes[0], x0:n.x - w0/2, x1:n.x + w0/2 }];
       let edge = growDir >= 0 ? n.x + w0/2 : n.x - w0/2;
       for (let i = 1; i < codes.length; i++){
-        const w = widths[i];
+        const w = widths[i], gap = codes[i].osi ? OSI_GAP : 0;
         let sx0, sx1;
-        if (growDir >= 0){ sx0 = edge; sx1 = edge + w; edge = sx1; }
-        else { sx1 = edge; sx0 = edge - w; edge = sx0; }
+        if (growDir >= 0){ sx0 = edge + gap; sx1 = sx0 + w; edge = sx1; }
+        else { sx1 = edge - gap; sx0 = sx1 - w; edge = sx0; }
         segs.push({ cd:codes[i], x0:sx0, x1:sx1 });
       }
-      const x0 = Math.min(...segs.map(s => s.x0));
-      const x1 = Math.max(...segs.map(s => s.x1));
-      const total = x1 - x0, y0 = n.y - h/2;
-      clipCounter++;
-      const clipId = `cap-clip-${clipCounter}`;
-      const clip = el("clipPath", { id:clipId }, defs);
-      el("rect", { x:F2(x0), y:F2(y0), width:F2(total), height:F2(h), rx:F2(h/2) }, clip);
-      const grp = el("g", { "clip-path":`url(#${clipId})` }, gLabels);
-      [...segs].sort((a, b) => a.x0 - b.x0).forEach((s, i, arr) => {
-        el("rect", { x:F2(s.x0), y:F2(y0), width:F2(s.x1 - s.x0), height:F2(h), fill:s.cd.c }, grp);
-        if (i > 0) el("rect", { x:F2(s.x0 - .75), y:F2(y0), width:1.5, height:F2(h), fill:bgColour }, grp);
-        const tx = el("text", { x:F2((s.x0 + s.x1)/2), y:F2(n.y + 3.9), "text-anchor":"middle",
-                                "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(s.cd.c),
-                                "letter-spacing":".3" }, gLabels);
-        tx.textContent = s.cd.t;
+      const y0 = n.y - h/2;
+      const runs = [[segs[0]]];
+      for (let i = 1; i < segs.length; i++){
+        if (segs[i].cd.osi) runs.push([segs[i]]); else runs[runs.length-1].push(segs[i]);
+      }
+      runs.forEach(run => {
+        const rx0 = Math.min(...run.map(s => s.x0)), rx1 = Math.max(...run.map(s => s.x1));
+        clipCounter++;
+        const clipId = `cap-clip-${clipCounter}`;
+        const clip = el("clipPath", { id:clipId }, defs);
+        el("rect", { x:F2(rx0), y:F2(y0), width:F2(rx1-rx0), height:F2(h), rx:F2(h/2) }, clip);
+        const grp = el("g", { "clip-path":`url(#${clipId})` }, gLabels);
+        run.forEach((s, i) => {
+          el("rect", { x:F2(s.x0), y:F2(y0), width:F2(s.x1-s.x0), height:F2(h), fill:s.cd.c }, grp);
+          if (i > 0) el("rect", { x:F2(s.x0-.75), y:F2(y0), width:1.5, height:F2(h), fill:bgColour }, grp);
+          const tx = el("text", { x:F2((s.x0+s.x1)/2), y:F2(n.y+3.9), "text-anchor":"middle",
+                                  "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(s.cd.c),
+                                  "letter-spacing":".3" }, gLabels);
+          tx.textContent = s.cd.t;
+        });
+        el("rect", { x:F2(rx0), y:F2(y0), width:F2(rx1-rx0), height:F2(h), rx:F2(h/2), fill:"none",
+                     stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
+        bb.rect(rx0, y0, rx1-rx0, h);
       });
-      el("rect", { x:F2(x0), y:F2(y0), width:F2(total), height:F2(h), rx:F2(h/2), fill:"none",
-                   stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
-      bb.rect(x0, y0, total, h);
-      codesExtent = w0 / 2;
+      for (let i = 1; i < runs.length; i++){
+        const a = runs[i-1][runs[i-1].length-1], b = runs[i][0];
+        const aFirst = a.x1 <= b.x0;
+        const gx0 = aFirst ? a.x1 : b.x1, gx1 = aFirst ? b.x0 : a.x0;
+        drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
+                          aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
+      }
+      codesExtent = w0 / 2;   // name sits opposite the ICs, only needs to clear the own-code segment
 
     } else if (codes.length){
       /* Horizontal/loop layout: each code gets its own separate pill-shaped
          caplet — the station's own line (codes[0]) sits centred straddling
          the line; interchange codes stack outward, abutting the previous
-         one with no gap. */
+         one with no gap (or, for an out-of-station interchange, a short
+         gap bridged by a connector line). */
       let edge = n.y;
       codes.forEach((cd, idx) => {
         const w = codeBoxW(cd.t);
-        const cy = idx === 0 ? n.y : edge + dir[1] * (h / 2);
-        edge = idx === 0 ? n.y + dir[1] * (h / 2) : edge + dir[1] * h;
+        let cy;
+        if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); }
+        else {
+          const gapStart = edge;
+          edge = edge + dir[1]*(cd.osi ? OSI_GAP : 0);
+          cy = edge + dir[1]*(h/2);
+          if (cd.osi) drawOsiConnector(el, gLabels, n.x, gapStart, n.x, edge, 5, codes[idx-1].c, cd.c);
+          edge = edge + dir[1]*h;
+        }
         const cx = n.x;
         el("rect", { x:F2(cx - w/2), y:F2(cy - h/2), width:F2(w), height:F2(h), rx:F2(h/2),
                      fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
@@ -618,6 +676,18 @@ function buildDiagram(cfg){
   });
 
   if (!isFinite(bb.x0)) bb.rect(0, 0, 10, 10);
+
+  if (cfg.layout === "vertical"){
+    /* Every vertical line (trunk + each branch) sits with labels only
+       extending to one side, which would leave the lines off-centre —
+       pad the shorter side so the *centre of gravity* of all the lines
+       together lands in the horizontal middle of the diagram, rather
+       than just the trunk on its own. Done before the legend/badge so
+       both anchor to the same (now re-centred) bounding box. */
+    const centre = verticalLineXs.reduce((a, x) => a + x, 0) / verticalLineXs.length;
+    const half = Math.max(centre - bb.x0, bb.x1 - centre);
+    bb.x0 = centre - half; bb.x1 = centre + half;
+  }
 
   /* ---- legend: every line referenced on this diagram (own line + any
      interchange codes seen), so a reader can identify what each colour means */
@@ -779,7 +849,7 @@ NS17 Bishan             > CC15
 NS18 Braddell
 NS19 Toa Payoh
 NS20 Novena
-NS21 Newton             > DT11
+NS21 Newton             > DT11*
 NS22 Orchard            > TE14
 NS23 Somerset
 NS24 Dhoby Ghaut        > NE6, CC1
@@ -791,7 +861,7 @@ NS28 Marina South Pier`
   ew:{
     name:"East West Line", code:"EWL", colour:"#009645", layout:"horizontal", spacing:100,
     spec:`EW1  Pasir Ris
-EW2  Tampines           > DT32
+EW2  Tampines           > DT32*
 EW3  Simei
 EW4  Tanah Merah
 EW5  Bedok
@@ -893,7 +963,7 @@ NE18 Punggol Coast`
   },
   dt:{
     name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal", spacing:100,
-    spec:`DT1  Bukit Panjang      > BP6
+    spec:`DT1  Bukit Panjang      > BP6*
 DT2  Cashew
 DT3  Hillview
 DT4  Hume
@@ -903,7 +973,7 @@ DT7  Sixth Avenue
 DT8  Tan Kah Kee
 DT9  Botanic Gardens    > CC19
 DT10 Stevens            > TE11
-DT11 Newton             > NS21
+DT11 Newton             > NS21*
 DT12 Little India       > NE7
 DT13 Rochor
 DT14 Bugis              > EW12
@@ -923,14 +993,14 @@ DT28 Kaki Bukit
 DT29 Bedok North
 DT30 Bedok Reservoir
 DT31 Tampines West
-DT32 Tampines           > EW2
+DT32 Tampines           > EW2*
 DT33 Tampines East
 DT34 Upper Changi
 DT35 Expo               > CG1`
   },
   te:{
     name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal", spacing:100,
-    spec:`TE1  Woodlands North     > RTS SG
+    spec:`TE1  Woodlands North     > RTS
 TE2  Woodlands          > NS9
 TE3  Woodlands South
 TE4  Springleaf
@@ -995,7 +1065,7 @@ ST23 Yishun Valley
 ST24 Montreal
 ST25 Cochrane
 ST26 Senoko
-ST27 Woodlands North     > TE1, RTS SG`
+ST27 Woodlands North     > TE1, RTS`
   },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
@@ -1053,7 +1123,7 @@ CR13 Bright Hill         > TE
 
 [branch from CR5 down shuttle CP1]
 CP2  Elias
-CP3  Riviera             > PE4
+CP3  Riviera             > PE4*
 CP4  Punggol             > NE17, PTC`
   },
   blank:{
@@ -1141,6 +1211,7 @@ function applyConfig(c){
   S.code.value = c.code || "";
   setColour(c.colour || "#005ec4");
   S.layout.value = c.layout || "horizontal";
+  syncLayoutButtons();
   S.spacing.value = c.spacing || SPACING_DEFAULT[S.layout.value] || 100;
   S.closed.checked = c.closed !== false;
   S.showCodes.checked = c.showCodes !== false;
@@ -1541,11 +1612,21 @@ S.hex.addEventListener("input", () => {
   const v = S.hex.value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(v)){ S.colour.value = v; render(); }
 });
-S.layout.addEventListener("change", () => {
+function syncLayoutButtons(){
+  document.querySelectorAll("#layoutRow .spacingBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.value === S.layout.value);
+  });
+}
+function setLayout(v){
+  S.layout.value = v;
+  syncLayoutButtons();
   S.spacing.value = SPACING_DEFAULT[S.layout.value] || 100;
   syncVisibility();
   if (mode === "editor") renderEditorRows();
   render(); fit();
+}
+document.querySelectorAll("#layoutRow .spacingBtn").forEach(b => {
+  b.onclick = () => setLayout(b.dataset.value);
 });
 
 $("addStationBtn").onclick = () => {
