@@ -12,9 +12,9 @@ const SVGNS = "http://www.w3.org/2000/svg";
    colour and the diagram legend can name every line it references.
    Edit/extend freely; unknown prefixes fall back to the current line. */
 const LINE_INFO = {
-  NS:{ name:"North South Line", colour:"#d42e12", acr:"NSL" },
-  EW:{ name:"East West Line", colour:"#009645", acr:"EWL" },
-  CG:{ name:"East West Line", colour:"#009645", acr:"EWL" },
+  NS:{ name:"North-South Line", colour:"#d42e12", acr:"NSL" },
+  EW:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
+  CG:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
   NE:{ name:"North East Line", colour:"#9900aa", acr:"NEL" },
   CC:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
   CE:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
@@ -84,7 +84,26 @@ function wrapName(name, threshold){
    were 4 chars) so e.g. EW7 and EW23 render the same size; only longer
    strings (used for legend acronyms like BPLRT) grow past that. */
 const CODE_BOX_W_MIN = 4 * 6.6 + 11;
-const codeBoxW = t => Math.max(CODE_BOX_W_MIN, t.length * 6.6 + 11);
+/* Splits a trailing letter-suffix off a code (e.g. "TE22A" -> base "TE22",
+   suffix "A") — real infill-station codes like this render the suffix
+   smaller, and it shouldn't make the caplet any wider than a normal one. */
+function splitCodeSuffix(t){
+  const m = /^([A-Za-z]+\d+)([A-Za-z])$/.exec(t || "");
+  return m ? { base:m[1], suffix:m[2] } : { base:t || "", suffix:"" };
+}
+const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 6.6 + 11);
+/* Fills a <text> element, rendering a detected suffix letter smaller. */
+function setCodeText(tx, text, fontSize){
+  const { base, suffix } = splitCodeSuffix(text);
+  if (!suffix){ tx.textContent = text; return; }
+  const t1 = document.createElementNS(SVGNS, "tspan");
+  t1.textContent = base;
+  tx.appendChild(t1);
+  const t2 = document.createElementNS(SVGNS, "tspan");
+  t2.setAttribute("font-size", (fontSize * 0.72).toFixed(2));
+  t2.textContent = suffix;
+  tx.appendChild(t2);
+}
 
 /* ------------------------------------------------------------------ parsing */
 function parseStation(s){
@@ -380,27 +399,47 @@ function buildDiagram(cfg){
   let loop = null;               // stadium geometry, when layout === 'loop'
   let loopW = 0;                 // loop's full width, needed later for branch placement
 
+  /* For horizontal/loop layouts, the trunk gap right next to a junction —
+     on whichever side the branch grows toward — is doubled, so the branch's
+     own curve has room to come off cleanly instead of cramming into a
+     normal-width gap. `gapUnits[i]` is 1 or 2, the size (in multiples of
+     `sp`) of the gap AFTER trunk station i (wrapping around for loops). */
+  const keyOf = st => (st.code || st.name || "").toUpperCase();
+  const junctionGrow = new Map();   // junction key -> 'next' | 'prev', which side it grows toward
+  branches.forEach(b => junctionGrow.set(b.from.toUpperCase(), b.grow === "left" ? "prev" : "next"));
+  const gapAfter = (i, wrap) => {
+    const j = wrap ? (i + 1) % trunk.length : i + 1;
+    if (j >= trunk.length || j < 0) return 1;
+    const curKey = keyOf(trunk[i]), nextKey = keyOf(trunk[j]);
+    return (junctionGrow.get(curKey) === "next" || junctionGrow.get(nextKey) === "prev") ? 2 : 1;
+  };
+
   if (cfg.layout === "loop"){
     const n = Math.max(trunk.length, 2);
+    const gapUnits = trunk.length ? trunk.map((st, i) => gapAfter(i, true)) : [1, 1];
+    const totalUnits = gapUnits.reduce((a, u) => a + u, 0);
     const H = Math.max(sp * 2, 200);
-    const W = (n * sp) / 2 + H;
+    const W = (totalUnits * sp) / 2 + H;
     loopW = W;
     loop = racetrack(0, 0, W, H, H / 2);
-    const step = loop.straightTotal / n;
+    const stepUnit = loop.straightTotal / totalUnits;
+    const positions = [];
+    let cum = 0;
+    trunk.forEach((st, i) => { positions.push(cum); cum += gapUnits[i] * stepUnit; });
     /* No station sits on the semicircular end-caps, so nothing else would
        ever feed their outer extent into the bounding box — without this
        they get clipped out of the viewBox. */
     bb.add(0, 0); bb.add(W, H);
 
     trunk.forEach((st, i) => {
-      const p = loop.atStraight(i * step);
+      const p = loop.atStraight(positions[i]);
       nodes.push({ ...st, x:p.x, y:p.y, nx:p.nx, ny:p.ny, colour,
                    kind: cfg.closed ? "" : (i === 0 || i === trunk.length-1 ? "term" : ""),
                    label: LOOPLABEL });
     });
     trunkPath = cfg.closed
       ? loop.path(0, loop.total)
-      : loop.path(0, loop.atStraight((trunk.length - 1) * step).t);
+      : loop.path(0, loop.atStraight(positions[trunk.length - 1]).t);
 
   } else if (cfg.layout === "vertical"){
     trunk.forEach((st, i) => {
@@ -410,11 +449,13 @@ function buildDiagram(cfg){
     trunkPath = `M 0 0 L 0 ${((trunk.length-1)*sp).toFixed(2)}`;
 
   } else { /* horizontal */
+    let x = 0;
     trunk.forEach((st, i) => {
-      nodes.push({ ...st, x:i * sp, y:0, colour, label:DIAG,
+      if (i > 0) x += gapAfter(i - 1, false) * sp;
+      nodes.push({ ...st, x, y:0, colour, label:DIAG,
                    kind: (i === 0 || i === trunk.length-1) ? "term" : "" });
     });
-    trunkPath = `M 0 0 L ${((trunk.length-1)*sp).toFixed(2)} 0`;
+    trunkPath = `M 0 0 L ${(nodes.length ? nodes[nodes.length-1].x : 0).toFixed(2)} 0`;
   }
 
   const trunkCount = nodes.length;
@@ -453,16 +494,21 @@ function buildDiagram(cfg){
 
     if (cfg.layout === "loop"){
       /* shoot out radially, then turn to run parallel with the loop's own
-         left-to-right station order. Default growth direction matches
-         which way the trunk itself continues from the junction, so the
-         branch reads as a second row alongside the trunk instead of
-         doubling back over the loop's own end-cap curve. */
+         left-to-right station order, aligned station-for-station with the
+         trunk stations past the junction (that's the side whose gap got
+         doubled above, so there's already room for the curve). Default
+         growth direction matches which way the trunk itself continues. */
       const sgn = jn.ny < 0 ? -1 : 1;
       const trunkNeighbour = j + 1 < trunkCount ? nodes[j + 1] : nodes[j - 1];
       const trunkDir = trunkNeighbour ? (trunkNeighbour.x >= jn.x ? 1 : -1) : 1;
       const turnDir = b.grow ? (b.grow === "left" ? -1 : 1) : trunkDir;
       const by = jn.y + sgn * gap;
-      const x1 = jn.x + turnDir * run;
+      /* an orthogonal branch shoots straight up from a top-half junction —
+         right through where the name normally sits (fixed above the
+         caplets) — so drop the name below the caplets instead */
+      if (b.curve === "orthogonal" && sgn < 0) jn.label = BELOW;
+      const x1 = jn.x + turnDir * 2 * sp;
+      const dist = Math.abs(x1 - jn.x);
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:x1 + turnDir * i * sp, y:by, colour:bc, label:LOOPLABEL,
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
@@ -475,8 +521,8 @@ function buildDiagram(cfg){
                left-to-right reading direction) so the branch reads as a
                smooth lane-change off the loop rather than a rounded
                right-angle turn */
-            const c1x = jn.x + turnDir*run*0.6, c1y = jn.y;
-            const c2x = x1 - turnDir*run*0.4, c2y = by;
+            const c1x = jn.x + turnDir*dist*0.5, c1y = jn.y;
+            const c2x = x1 - turnDir*dist*0.3, c2y = by;
             return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(c2y)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
           })();
       drawBranchLine(d, bc, shuttle);
@@ -507,7 +553,10 @@ function buildDiagram(cfg){
       const sgn = b.dir === "up" ? -1 : 1;
       const growSgn = b.grow === "left" ? -1 : 1;
       const by = jn.y + sgn * gap;
-      const x1 = jn.x + growSgn * run;
+      /* aligned station-for-station with the trunk stations past the
+         junction (the side whose gap got doubled above) */
+      const x1 = jn.x + growSgn * 2 * sp;
+      const dist = Math.abs(x1 - jn.x);
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:x1 + growSgn * i * sp, y:by, colour:bc, label:DIAG,
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
@@ -516,7 +565,7 @@ function buildDiagram(cfg){
       const d = b.curve === "orthogonal"
         ? roundedPath([[jn.x, jn.y], [jn.x, by], [lastX, by]], 56)
         : (() => {
-            const c1x = jn.x + growSgn*run*0.6, c2x = x1 - growSgn*run*0.4;
+            const c1x = jn.x + growSgn*dist*0.5, c2x = x1 - growSgn*dist*0.3;
             return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
           })();
       drawBranchLine(d, bc, shuttle);
@@ -578,7 +627,7 @@ function buildDiagram(cfg){
           const tx = el("text", { x:F2((s.x0+s.x1)/2), y:F2(n.y+3.9), "text-anchor":"middle",
                                   "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(s.cd.c),
                                   "letter-spacing":".3" }, gLabels);
-          tx.textContent = s.cd.t;
+          setCodeText(tx, s.cd.t, STYLE.codeSize);
         });
         el("rect", { x:F2(rx0), y:F2(y0), width:F2(rx1-rx0), height:F2(h), rx:F2(h/2), fill:"none",
                      stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
@@ -617,7 +666,7 @@ function buildDiagram(cfg){
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
                                 "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(cd.c),
                                 "letter-spacing":".3" }, gLabels);
-        tx.textContent = cd.t;
+        setCodeText(tx, cd.t, STYLE.codeSize);
         bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
       });
       codesExtent = Math.abs(edge - n.y);
@@ -784,7 +833,7 @@ let diagramDark = false;   // the diagram's own light/dark background, independe
 /* Quick spacing presets shown as buttons — vertical lists read comfortably
    tighter than horizontal/loop layouts, hence the different values. */
 const SPACING_PRESETS = { horizontal:[60,80,100], loop:[60,80,100], vertical:[40,60,80] };
-const SPACING_DEFAULT = { horizontal:100, vertical:80, loop:100 };
+const SPACING_DEFAULT = { horizontal:60, vertical:40, loop:100 };
 
 function renderSpacingButtons(){
   const list = SPACING_PRESETS[S.layout.value] || SPACING_PRESETS.horizontal;
@@ -800,6 +849,53 @@ function renderSpacingButtons(){
   });
 }
 
+/* The NS/EW/CC/... -> {name,colour,acr} table is user-editable at runtime:
+   rows mutate LINE_INFO in place (renaming a prefix deletes the old key),
+   and the whole table round-trips through save()/JSON export. */
+function renderLineInfoRows(){
+  const container = $("lineInfoRows");
+  container.innerHTML = "";
+  Object.keys(LINE_INFO).sort().forEach(prefix => {
+    const info = LINE_INFO[prefix];
+    const row = document.createElement("div");
+    row.className = "liRow";
+
+    const prefixInp = document.createElement("input");
+    prefixInp.className = "liPrefix"; prefixInp.placeholder = "NS"; prefixInp.value = prefix;
+    prefixInp.onchange = () => {
+      const next = prefixInp.value.trim().toUpperCase();
+      if (!next || next === prefix){ prefixInp.value = prefix; return; }
+      delete LINE_INFO[prefix];
+      LINE_INFO[next] = info;
+      renderLineInfoRows();
+      render();
+    };
+    row.appendChild(prefixInp);
+
+    const nameInp = document.createElement("input");
+    nameInp.className = "liName"; nameInp.placeholder = "Line name"; nameInp.value = info.name || "";
+    nameInp.oninput = () => { info.name = nameInp.value; render(); };
+    row.appendChild(nameInp);
+
+    const acrInp = document.createElement("input");
+    acrInp.className = "liAcr"; acrInp.placeholder = "NSL"; acrInp.value = info.acr || "";
+    acrInp.oninput = () => { info.acr = acrInp.value.trim(); render(); };
+    row.appendChild(acrInp);
+
+    const colourInp = document.createElement("input");
+    colourInp.type = "color"; colourInp.value = info.colour || "#8a9099";
+    colourInp.title = "Colour"; colourInp.oninput = () => { info.colour = colourInp.value; render(); };
+    row.appendChild(colourInp);
+
+    const del = document.createElement("button");
+    del.type = "button"; del.className = "rowDel"; del.textContent = "✕"; del.title = "Remove prefix";
+    del.onclick = () => { delete LINE_INFO[prefix]; renderLineInfoRows(); render(); };
+    row.appendChild(del);
+
+    container.appendChild(row);
+  });
+}
+
 /* Preset picker metadata — drives the little coloured line-acronym caplets
    at the top of the sidebar. `key` looks up EXAMPLES. Grouped into the
    categories LTA/operators actually use: Current (open today), Future
@@ -808,8 +904,8 @@ function renderSpacingButtons(){
    added once that data is provided). */
 const PRESET_GROUPS = [
   { name:"Current", items:[
-    { key:"ns", acr:"NSL", label:"North South Line",  colour:"#d42e12" },
-    { key:"ew", acr:"EWL", label:"East West Line",     colour:"#009645" },
+    { key:"ns", acr:"NSL", label:"North-South Line",  colour:"#d42e12" },
+    { key:"ew", acr:"EWL", label:"East-West Line",     colour:"#009645" },
     { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d" },
     { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa" },
     { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4" },
@@ -820,7 +916,7 @@ const PRESET_GROUPS = [
     { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
   ]},
   { name:"Proposed", items:[
-    { key:"stl", acr:"STL", label:"Seletar-Tengah Line (speculative)", colour:"#e8467c" },
+    { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c" },
   ]},
   { name:"Other", items:[
     { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099" }
@@ -829,7 +925,7 @@ const PRESET_GROUPS = [
 
 const EXAMPLES = {
   ns:{
-    name:"North South Line", code:"NSL", colour:"#d42e12", layout:"horizontal", spacing:100,
+    name:"North-South Line", code:"NSL", colour:"#d42e12", layout:"horizontal", spacing:100,
     spec:`NS1  Jurong East        > EW24
 NS2  Bukit Batok
 NS3  Bukit Gombak
@@ -859,7 +955,7 @@ NS27 Marina Bay         > CC33, TE20
 NS28 Marina South Pier`
   },
   ew:{
-    name:"East West Line", code:"EWL", colour:"#009645", layout:"horizontal", spacing:100,
+    name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal", spacing:100,
     spec:`EW1  Pasir Ris
 EW2  Tampines           > DT32*
 EW3  Simei
@@ -1000,7 +1096,7 @@ DT35 Expo               > CG1`
   },
   te:{
     name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal", spacing:100,
-    spec:`TE1  Woodlands North     > RTS
+    spec:`TE1  Woodlands North     > RTS*
 TE2  Woodlands          > NS9
 TE3  Woodlands South
 TE4  Springleaf
@@ -1009,6 +1105,7 @@ TE6  Mayflower
 TE7  Bright Hill
 TE8  Upper Thomson
 TE9  Caldecott          > CC17
+TE10 Mount Pleasant
 TE11 Stevens            > DT10
 TE12 Napier
 TE13 Orchard Boulevard
@@ -1019,17 +1116,19 @@ TE17 Outram Park        > EW16, NE3
 TE18 Maxwell
 TE19 Shenton Way
 TE20 Marina Bay         > NS27, CC33
+TE21 Marina South
 TE22 Gardens by the Bay
-TE23 Founders' Memorial
-TE24 Tanjong Rhu
-TE25 Katong Park
-TE26 Tanjong Katong
-TE27 Marine Parade
-TE28 Marine Terrace
-TE29 Siglap
-TE30 Bayshore
-TE31 Bedok South
-TE32 Sungei Bedok`
+TE22A Founders' Memorial
+TE23 Tanjong Rhu
+TE24 Katong Park
+TE25 Tanjong Katong
+TE26 Marine Parade
+TE27 Marine Terrace
+TE28 Siglap
+TE29 Bayshore
+# Bedok South and Sungei Bedok are under testing, due 2H 2026
+TE30 Bedok South
+TE31 Sungei Bedok       > DT37`
   },
   stl:{
     /* SPECULATIVE — not an official LTA project. Transcribed from a fan
@@ -1065,7 +1164,7 @@ ST23 Yishun Valley
 ST24 Montreal
 ST25 Cochrane
 ST26 Senoko
-ST27 Woodlands North     > TE1, RTS`
+ST27 Woodlands North     > TE1, RTS*`
   },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
@@ -1219,6 +1318,11 @@ function applyConfig(c){
   S.showBadge.checked = c.showBadge !== false;
   S.opaque.checked = c.opaque !== false;
   setDiagramDark(c.dark === true);
+  if (c.lineInfo){
+    for (const k in LINE_INFO) delete LINE_INFO[k];
+    Object.assign(LINE_INFO, c.lineInfo);
+  }
+  renderLineInfoRows();
   const errors = setLiveFromText(c.spec || "");
   syncTextFromLive();
   syncVisibility();
@@ -1239,7 +1343,18 @@ function setDiagramDark(v){
 function syncVisibility(){
   const l = S.layout.value;
   $("closedField").style.display = l === "loop"  ? "" : "none";
+  $("loopRotateField").style.display = l === "loop" ? "" : "none";
   renderSpacingButtons();
+}
+
+function rotateLoop(dir){
+  if (mode === "text") setLiveFromText(S.spec.value);   // pick up any unsynced text edits first
+  if (live.trunk.length < 2) return;
+  if (dir === "cw") live.trunk.push(live.trunk.shift());
+  else live.trunk.unshift(live.trunk.pop());
+  syncTextFromLive();
+  if (mode === "editor") renderEditorRows();
+  render();
 }
 
 /* ------------------------------------------------------------ editor rows */
@@ -1513,12 +1628,44 @@ function fitHeight(){
 }
 
 /* ------------------------------------------------------------------ exports */
-function serialize(){
+/* The page's @font-face points at a local fonts/ file via a <link>
+   stylesheet — that reference means nothing once the SVG is exported
+   standalone, so the font silently falls back everywhere else it's
+   opened. Embed the actual font bytes as a data URI @font-face inside
+   the exported SVG when the file is present; fails silently (font just
+   isn't embedded) if it isn't. */
+let fontDataUriCache = null;
+async function fontDataUri(){
+  if (fontDataUriCache !== null) return fontDataUriCache;
+  for (const [file, fmt] of [["fonts/LTAIdentity-Medium.woff2", "woff2"], ["fonts/LTAIdentity-Medium.woff", "woff"]]){
+    try {
+      const res = await fetch(file);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      let binary = "";
+      new Uint8Array(buf).forEach(b => { binary += String.fromCharCode(b); });
+      const b64 = btoa(binary);
+      fontDataUriCache = `@font-face{font-family:"LTA Identity";font-weight:400 700;` +
+        `src:url(data:font/${fmt};base64,${b64}) format("${fmt}");}`;
+      return fontDataUriCache;
+    } catch (e){ /* try next format */ }
+  }
+  fontDataUriCache = "";
+  return fontDataUriCache;
+}
+
+async function serialize(){
   if (!current) return null;
   const clone = current.svg.cloneNode(true);
   clone.setAttribute("width",  Math.ceil(current.width));
   clone.setAttribute("height", Math.ceil(current.height));
   clone.setAttribute("xmlns", SVGNS);
+  const fontCss = await fontDataUri();
+  if (fontCss){
+    const style = document.createElementNS(SVGNS, "style");
+    style.textContent = fontCss;
+    clone.insertBefore(style, clone.firstChild);
+  }
   return '<?xml version="1.0" encoding="UTF-8"?>\n' +
          new XMLSerializer().serializeToString(clone);
 }
@@ -1535,13 +1682,13 @@ function download(blob, filename){
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-$("dlSvg").onclick = () => {
-  const s = serialize();
+$("dlSvg").onclick = async () => {
+  const s = await serialize();
   if (s) download(new Blob([s], { type:"image/svg+xml" }), slug() + ".svg");
 };
 
-$("dlPng").onclick = () => {
-  const s = serialize();
+$("dlPng").onclick = async () => {
+  const s = await serialize();
   if (!s) return;
   const scale = 2;
   const img = new Image();
@@ -1563,7 +1710,8 @@ $("dlJson").onclick = () => {
   const data = {
     name:c.name, code:c.code, colour:c.colour, layout:c.layout,
     spacing:c.spacing, closed:c.closed, showCodes:c.showCodes, showIc:c.showIc,
-    showBadge:c.showBadge, opaque:c.opaque, dark:c.dark, spec:S.spec.value
+    showBadge:c.showBadge, opaque:c.opaque, dark:c.dark, spec:S.spec.value,
+    lineInfo:LINE_INFO
   };
   download(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }),
            slug() + ".json");
@@ -1590,7 +1738,8 @@ function save(){
       name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
       spacing:S.spacing.value, closed:S.closed.checked,
       showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-      showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value
+      showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
+      lineInfo:LINE_INFO
     }));
   } catch (e){ /* storage disabled — no problem */ }
 }
@@ -1642,8 +1791,17 @@ $("addBranchBtn").onclick = () => {
   });
   syncTextFromLive(); renderEditorRows(); render();
 };
+$("addLineInfoBtn").onclick = () => {
+  let key = "XX", n = 1;
+  while (LINE_INFO[key]) key = "XX" + (n++);
+  LINE_INFO[key] = { name:"New Line", colour:"#8a9099", acr:key };
+  renderLineInfoRows();
+  render();
+};
 $("modeEditorBtn").onclick = () => setMode("editor");
 $("modeTextBtn").onclick = () => setMode("text");
+$("loopRotateCw").onclick = () => rotateLoop("cw");
+$("loopRotateCcw").onclick = () => rotateLoop("ccw");
 
 PRESET_GROUPS.forEach(group => {
   const label = document.createElement("div");
@@ -1675,6 +1833,18 @@ $("main").addEventListener("wheel", e => {
   e.preventDefault();
   setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1/1.1));
 }, { passive:false });
+
+/* --------------------------------------------------------------- export menu */
+$("exportMenuBtn").onclick = e => {
+  e.stopPropagation();
+  $("exportMenu").classList.toggle("open");
+};
+$("exportMenuPanel").addEventListener("click", e => {
+  if (e.target.tagName === "BUTTON") $("exportMenu").classList.remove("open");
+});
+document.addEventListener("click", e => {
+  if (!$("exportMenu").contains(e.target)) $("exportMenu").classList.remove("open");
+});
 
 /* --------------------------------------------------------------------- theme */
 function applyTheme(t){

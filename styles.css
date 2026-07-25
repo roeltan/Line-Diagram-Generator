@@ -71,6 +71,20 @@
         margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
   .sect:first-child, #presetRow + .sect{margin-top:0;padding-top:0;border-top:0}
   .sect.sectRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  summary.sect{cursor:pointer;list-style:none;user-select:none}
+  summary.sect::-webkit-details-marker{display:none}
+  summary.sect::before{content:"▸ ";display:inline-block}
+  details[open] summary.sect::before{content:"▾ "}
+  .liRow{display:flex;align-items:center;gap:5px;background:var(--field);border:1px solid var(--border);
+         border-radius:7px;padding:5px 6px}
+  .liRow input{min-width:0;border:1px solid transparent;background:transparent;color:var(--ink);
+               padding:5px 6px;border-radius:5px;font-size:12.5px}
+  .liRow input:hover{border-color:var(--border)}
+  .liRow input:focus{border-color:var(--accent);background:var(--panel);box-shadow:none}
+  .liPrefix{width:52px;flex:none;font-weight:650;text-transform:uppercase}
+  .liName{flex:1}
+  .liAcr{width:56px;flex:none;color:var(--muted)}
+  .liRow input[type=color]{width:26px;height:26px;flex:none;padding:1px}
   .hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.5}
   .hint code{background:color-mix(in srgb,var(--muted) 14%,transparent);padding:1px 4px;border-radius:4px;font-size:11.5px}
   #errors{margin:10px 0 0;padding:9px 11px;border-radius:7px;background:#fdecec;color:#a01d1d;
@@ -79,6 +93,15 @@
   #errors ul{margin:0;padding-left:16px}
   .zoom{display:flex;align-items:center;gap:4px}
   .zoom span{font-size:12px;color:var(--muted);min-width:42px;text-align:center;font-variant-numeric:tabular-nums}
+  .menu{position:relative}
+  .menuPanel{display:none;flex-direction:column;position:absolute;top:calc(100% + 6px);right:0;
+             background:var(--panel);border:1px solid var(--border);border-radius:9px;
+             box-shadow:var(--shadow);padding:6px;min-width:170px;z-index:30}
+  .menu.open .menuPanel{display:flex}
+  .menuPanel button{text-align:left;border:0;background:transparent;color:var(--ink);
+                     padding:8px 10px;border-radius:6px;font-weight:500;white-space:nowrap}
+  .menuPanel button:hover{background:var(--field);color:var(--ink)}
+  .menuDivider{height:1px;background:var(--border);margin:5px 2px}
   .spacingRow{display:flex;gap:8px}
   .spacingBtn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--field);
               color:var(--ink);font-size:13px;font-weight:600;text-align:center}

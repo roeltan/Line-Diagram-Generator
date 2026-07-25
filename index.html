@@ -18,10 +18,16 @@
     <button class="icon" id="fitWidth" title="Fit width">↔</button>
     <button class="icon" id="fitHeight" title="Fit height">↕</button>
   </div>
-  <button id="dlSvg">SVG</button>
-  <button id="dlPng">PNG</button>
-  <button class="primary" id="dlJson">Save JSON</button>
-  <button id="upJson">Open JSON</button>
+  <div class="menu" id="exportMenu">
+    <button class="primary" id="exportMenuBtn">Export / Save ▾</button>
+    <div class="menuPanel" id="exportMenuPanel">
+      <button type="button" id="dlSvg">Download SVG</button>
+      <button type="button" id="dlPng">Download PNG</button>
+      <div class="menuDivider"></div>
+      <button type="button" id="dlJson">Save as JSON</button>
+      <button type="button" id="upJson">Open JSON…</button>
+    </div>
+  </div>
   <button id="themeToggle" title="Toggle light/dark theme">🌙 Dark</button>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
 </header>
@@ -50,6 +56,16 @@
     </div>
     <div class="swatches" id="swatches"></div>
 
+    <details id="lineInfoDetails">
+      <summary class="sect">Interchange colours</summary>
+      <p class="hint" style="margin:-4px 0 8px">
+        How station-code prefixes (e.g. <code>NS</code>, <code>EW</code>) are coloured and named
+        when they show up as an interchange — used for other lines' caplets and the legend.
+      </p>
+      <div id="lineInfoRows" class="rowList"></div>
+      <button type="button" class="addBtn" id="addLineInfoBtn">+ Add prefix</button>
+    </details>
+
     <div class="sect">Layout</div>
     <div class="field">
       <label>Shape</label>
@@ -70,6 +86,13 @@
       <div class="spacingRow">
         <button type="button" class="spacingBtn active" id="diagLightBtn">Light</button>
         <button type="button" class="spacingBtn" id="diagDarkBtn">Dark</button>
+      </div>
+    </div>
+    <div class="field" id="loopRotateField">
+      <label>Rotate loop</label>
+      <div class="spacingRow">
+        <button type="button" class="spacingBtn" id="loopRotateCcw" title="Rotate counter-clockwise">↺ CCW</button>
+        <button type="button" class="spacingBtn" id="loopRotateCw" title="Rotate clockwise">↻ CW</button>
       </div>
     </div>
     <div class="checks">
