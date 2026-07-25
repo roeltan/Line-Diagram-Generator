@@ -51,7 +51,11 @@ const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Int
 
 /* Rough text width; good enough for bounding boxes and label offsets. */
 const measure = (t, size) => (t ? t.length * size * 0.565 : 0);
-const codeBoxW = t => Math.max(30, t.length * 7.6 + 14);
+/* All codes up to 4 chars share one uniform caplet width (as if every code
+   were 4 chars) so e.g. EW7 and EW23 render the same size; only longer
+   strings (used for legend acronyms like BPLRT) grow past that. */
+const CODE_BOX_W_MIN = 4 * 7.6 + 14;
+const codeBoxW = t => Math.max(CODE_BOX_W_MIN, t.length * 7.6 + 14);
 
 /* ------------------------------------------------------------------ parsing */
 function parseStation(s){
@@ -253,12 +257,10 @@ function buildDiagram(cfg){
   const { trunk, branches } = cfg;
   const colour = cfg.colour;
   const svg = el("svg", { xmlns:SVGNS, version:"1.1" });
-  const defs     = el("defs", null, svg);
   const gLines   = el("g", { fill:"none", "stroke-linecap":"round", "stroke-linejoin":"round" }, svg);
   const gLabels  = el("g", { "font-family":FONT }, svg);
   const gMarkers = el("g", null, svg);
   const bb = makeBBox();
-  let clipCounter = 0;
   const F2 = v => v.toFixed(2);
 
   /* ---- resolve nodes: trunk positions per layout, then branches ---- */
@@ -282,6 +284,10 @@ function buildDiagram(cfg){
     const W = (n * sp) / 2 + H;
     loop = racetrack(0, 0, W, H, H / 2);
     const step = loop.straightTotal / n;
+    /* No station sits on the semicircular end-caps, so nothing else would
+       ever feed their outer extent into the bounding box — without this
+       they get clipped out of the viewBox. */
+    bb.add(0, 0); bb.add(W, H);
 
     trunk.forEach((st, i) => {
       const p = loop.atStraight(i * step);
@@ -385,59 +391,32 @@ function buildDiagram(cfg){
     let codesExtent = 0;
 
     if (codes.length){
-      /* One merged pill per station: colour-banded per line, rounded only at
-         its two outer ends (via a clip), with a thin white divider between
-         segments — abutting caplets, same look as the real system map.
-         `lineGap` stands the pill off the outer edge of the trunk stroke
-         so it doesn't overlap/cut into the coloured line underneath. */
-      const lineGap = STYLE.lineWidth / 2 + 2;
-      const widths = codes.map(cd => codeBoxW(cd.t));
-      clipCounter++;
-      const clipId = `cap-clip-${clipCounter}`;
-      const clip = el("clipPath", { id:clipId }, defs);
-      const grp = el("g", { "clip-path":`url(#${clipId})` }, gLabels);
-      let x0, y0, pillW, pillH;
-
-      if (horiz){
-        /* codes read left-to-right, side by side */
-        const total = widths.reduce((a, w) => a + w, 0);
-        pillW = total; pillH = h;
-        x0 = dir[0] < 0 ? n.x - lineGap - total : n.x + lineGap;
-        y0 = n.y - h / 2;
-        el("rect", { x:F2(x0), y:F2(y0), width:F2(pillW), height:F2(pillH), rx:F2(pillH/2) }, clip);
-        let cx = x0;
-        codes.forEach((cd, idx) => {
-          el("rect", { x:F2(cx), y:F2(y0), width:F2(widths[idx]), height:F2(h), fill:cd.c }, grp);
-          if (idx > 0) el("rect", { x:F2(cx-.75), y:F2(y0), width:1.5, height:F2(h), fill:"#fff" }, grp);
-          const tx = el("text", { x:F2(cx+widths[idx]/2), y:F2(n.y+3.9), "text-anchor":"middle",
-                                  "font-size":STYLE.codeSize, "font-weight":700, fill:"#fff",
-                                  "letter-spacing":".3" }, gLabels);
-          tx.textContent = cd.t;
-          cx += widths[idx];
-        });
-      } else {
-        /* codes stack away from the line, joined into one tall pill */
-        const w = Math.max(...widths);
-        const totalH = codes.length * h;
-        pillW = w; pillH = totalH;
-        x0 = n.x - w / 2;
-        y0 = dir[1] < 0 ? n.y - lineGap - totalH : n.y + lineGap;
-        el("rect", { x:F2(x0), y:F2(y0), width:F2(pillW), height:F2(pillH), rx:F2(pillW/2) }, clip);
-        let cy = y0;
-        codes.forEach((cd, idx) => {
-          el("rect", { x:F2(x0), y:F2(cy), width:F2(w), height:F2(h), fill:cd.c }, grp);
-          if (idx > 0) el("rect", { x:F2(x0), y:F2(cy-.75), width:F2(w), height:1.5, fill:"#fff" }, grp);
-          const tx = el("text", { x:F2(n.x), y:F2(cy+h/2+3.9), "text-anchor":"middle",
-                                  "font-size":STYLE.codeSize, "font-weight":700, fill:"#fff",
-                                  "letter-spacing":".3" }, gLabels);
-          tx.textContent = cd.t;
-          cy += h;
-        });
-      }
-      el("rect", { x:F2(x0), y:F2(y0), width:F2(pillW), height:F2(pillH), rx:F2(Math.min(pillW,pillH)/2),
-                   fill:"none", stroke:STYLE.capletOutline, "stroke-width":STYLE.capletOutlineW }, gLabels);
-      bb.rect(x0, y0, pillW, pillH);
-      codesExtent = lineGap + (horiz ? pillW : pillH);
+      /* Each code gets its own separate pill-shaped caplet (own fill, own
+         white outline) — the station's own line (codes[0]) sits centred
+         straddling the line itself; any interchange codes after it stack
+         outward, each one abutting the previous with no gap. */
+      let edge = horiz ? n.x : n.y;   // running outward edge, starts at the line
+      codes.forEach((cd, idx) => {
+        const w = codeBoxW(cd.t);
+        let cx, cy;
+        if (horiz){
+          cx = idx === 0 ? n.x : edge + dir[0] * (w / 2);
+          edge = idx === 0 ? n.x + dir[0] * (w / 2) : edge + dir[0] * w;
+          cy = n.y;
+        } else {
+          cy = idx === 0 ? n.y : edge + dir[1] * (h / 2);
+          edge = idx === 0 ? n.y + dir[1] * (h / 2) : edge + dir[1] * h;
+          cx = n.x;
+        }
+        el("rect", { x:F2(cx - w/2), y:F2(cy - h/2), width:F2(w), height:F2(h), rx:F2(h/2),
+                     fill:cd.c, stroke:STYLE.capletOutline, "stroke-width":STYLE.capletOutlineW }, gLabels);
+        const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
+                                "font-size":STYLE.codeSize, "font-weight":700, fill:"#fff",
+                                "letter-spacing":".3" }, gLabels);
+        tx.textContent = cd.t;
+        bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
+      });
+      codesExtent = Math.abs(edge - (horiz ? n.x : n.y));
     }
 
     /* station name */
@@ -494,23 +473,28 @@ function buildDiagram(cfg){
     const name = (info && info.name) || code || "Line";
     if (legendSeen.has(name)) return;
     legendSeen.add(name);
-    legendItems.push({ name, colour: (info && info.colour) || fallbackColour });
+    legendItems.push({ name, colour: (info && info.colour) || fallbackColour, acr: (info && info.acr) || prefix });
   };
   if (cfg.code || cfg.name) addLegend(cfg.code || cfg.name, colour);
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(c => addLegend(c, colour)));
 
   if (legendItems.length > 1 || (legendItems.length === 1 && cfg.code)){
     const g = el("g", { "font-family":FONT }, svg);
+    const lh = 17;
     let lx = bb.x0, ly = bb.y1 + 36;
     const rowMaxX = bb.x0 + Math.max(bb.x1 - bb.x0, 480);
     legendItems.forEach(it => {
-      const w = 20 + measure(it.name, 11.5) + 26;
-      if (lx + w > rowMaxX && lx > bb.x0){ lx = bb.x0; ly += 24; }
-      el("circle", { cx:F2(lx+6), cy:F2(ly), r:6, fill:it.colour }, g);
-      const t = el("text", { x:F2(lx+18), y:F2(ly+4.2), "font-size":11.5, "font-weight":600,
+      const capW = codeBoxW(it.acr);
+      const w = capW + 8 + measure(it.name, 11.5) + 18;
+      if (lx + w > rowMaxX && lx > bb.x0){ lx = bb.x0; ly += 26; }
+      el("rect", { x:F2(lx), y:F2(ly - lh/2), width:F2(capW), height:F2(lh), rx:F2(lh/2), fill:it.colour }, g);
+      const capText = el("text", { x:F2(lx + capW/2), y:F2(ly + 3.6), "text-anchor":"middle",
+                                   "font-size":9.5, "font-weight":700, fill:"#fff", "letter-spacing":".3" }, g);
+      capText.textContent = it.acr;
+      const t = el("text", { x:F2(lx + capW + 8), y:F2(ly + 4.2), "font-size":11.5, "font-weight":600,
                              fill:STYLE.nameFill }, g);
       t.textContent = it.name;
-      bb.rect(lx, ly-8, w-6, 16);
+      bb.rect(lx, ly - lh/2, w - 6, lh);
       lx += w;
     });
   }
@@ -567,13 +551,13 @@ const SPACING_DEFAULT = { horizontal:100, vertical:56, loop:104 };
 /* Preset picker metadata — drives the little coloured line-acronym caplets
    shown under the Stations header. `key` looks up EXAMPLES. */
 const PRESET_META = [
-  { key:"ns",  acr:"NSL", label:"North South Line",        colour:"#d42e12" },
-  { key:"ew",  acr:"EWL", label:"East West + Changi",       colour:"#009645" },
-  { key:"cc",  acr:"CCL", label:"Circle Line (loop + spur)", colour:"#fa9e0d" },
-  { key:"ne",  acr:"NEL", label:"North East Line",          colour:"#9900aa" },
-  { key:"jrl", acr:"JRL", label:"Jurong Region (u/c, 2028+)", colour:"#0099aa" },
-  { key:"crl", acr:"CRL", label:"Cross Island (u/c, 2030+)", colour:"#97c616" },
-  { key:"blank", acr:"—", label:"Blank template",           colour:"#8a9099" }
+  { key:"ns",  acr:"NSL", label:"North South Line",  colour:"#d42e12" },
+  { key:"ew",  acr:"EWL", label:"East West Line",     colour:"#009645" },
+  { key:"cc",  acr:"CCL", label:"Circle Line",        colour:"#fa9e0d" },
+  { key:"ne",  acr:"NEL", label:"North East Line",    colour:"#9900aa" },
+  { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa" },
+  { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
+  { key:"blank", acr:"—", label:"Blank template",     colour:"#8a9099" }
 ];
 
 const EXAMPLES = {
