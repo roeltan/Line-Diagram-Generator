@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Line Diagram Generator</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --ink:#1b1f24; --muted:#6b7280;
+    --border:#e3e6ea; --field:#ffffff; --accent:#005ec4; --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#15181c; --panel:#1d2126; --ink:#e8eaed; --muted:#9aa3ad;
+           --border:#2c3238; --field:#14171b; --accent:#5aa2ff; --shadow:0 1px 2px rgba(0,0,0,.4);}
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);overflow:hidden}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);
+         border-bottom:1px solid var(--border);height:56px}
+  header h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+  header .spacer{flex:1}
+  .layout{display:flex;height:calc(100% - 56px)}
+  aside{width:392px;min-width:392px;background:var(--panel);border-right:1px solid var(--border);
+        overflow-y:auto;padding:16px}
+  main{flex:1;overflow:auto;background:
+       linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%),
+       linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%);
+       background-size:22px 22px;background-position:0 0,11px 11px;padding:28px;display:block}
+  #stage{display:inline-block;background:#fff;box-shadow:var(--shadow);border-radius:4px}
+  label{display:block;font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
+        color:var(--muted);margin:0 0 5px}
+  input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);
+        border-radius:7px;background:var(--field);color:var(--ink);font:inherit;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+  textarea{font:12.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+  .field{margin-bottom:14px}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1;min-width:0}
+  button{font:inherit;font-weight:550;padding:7px 12px;border-radius:7px;border:1px solid var(--border);
+         background:var(--field);color:var(--ink);cursor:pointer;white-space:nowrap}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{filter:brightness(1.08);color:#fff}
+  button.icon{padding:6px 10px;font-variant-numeric:tabular-nums}
+  .swatches{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .sw{width:22px;height:22px;border-radius:5px;border:1px solid rgba(0,0,0,.15);cursor:pointer;padding:0}
+  .sw:hover{transform:scale(1.12)}
+  .colorRow{display:flex;gap:8px;align-items:center}
+  input[type=color]{width:44px;height:36px;padding:2px;border:1px solid var(--border);border-radius:7px;background:var(--field);cursor:pointer}
+  .checks{display:flex;flex-direction:column;gap:8px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);text-transform:none;
+       letter-spacing:0;font-weight:450;margin:0}
+  .chk input{width:15px;height:15px;accent-color:var(--accent);margin:0}
+  fieldset{border:0;border-top:1px solid var(--border);margin:18px 0 14px;padding:14px 0 0}
+  legend{display:none}
+  .sect{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+        margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
+  .sect:first-child{margin-top:0;padding-top:0;border-top:0}
+  .hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.5}
+  .hint code{background:color-mix(in srgb,var(--muted) 14%,transparent);padding:1px 4px;border-radius:4px;font-size:11.5px}
+  #errors{margin:10px 0 0;padding:9px 11px;border-radius:7px;background:#fdecec;color:#a01d1d;
+          font-size:12.5px;display:none;line-height:1.55}
+  @media (prefers-color-scheme:dark){#errors{background:#3a1d1d;color:#ffb4b4}}
+  #errors ul{margin:0;padding-left:16px}
+  .zoom{display:flex;align-items:center;gap:4px}
+  .zoom span{font-size:12px;color:var(--muted);min-width:42px;text-align:center;font-variant-numeric:tabular-nums}
+  .slider{display:flex;align-items:center;gap:9px}
+  .slider input[type=range]{flex:1;accent-color:var(--accent)}
+  .slider output{font-size:12px;color:var(--muted);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+  #stationCount{float:right;text-transform:none;letter-spacing:0;font-weight:450}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Line Diagram Generator</h1>
+  <select id="preset" style="width:200px" title="Load an example">
+    <option value="">Load example…</option>
+    <option value="ns">North South Line (horizontal)</option>
+    <option value="ew">East West Line + branch (snake)</option>
+    <option value="cc">Circle Line + CE branch (loop)</option>
+    <option value="ne">North East Line (vertical)</option>
+    <option value="blank">Blank template</option>
+  </select>
+  <div class="spacer"></div>
+  <div class="zoom">
+    <button class="icon" id="zoomOut" title="Zoom out">−</button>
+    <span id="zoomLabel">100%</span>
+    <button class="icon" id="zoomIn" title="Zoom in">+</button>
+    <button id="zoomFit">Fit</button>
+  </div>
+  <button id="dlSvg">SVG</button>
+  <button id="dlPng">PNG</button>
+  <button class="primary" id="dlJson">Save JSON</button>
+  <button id="upJson">Open JSON</button>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="sect">Line</div>
+    <div class="field">
+      <label for="lineName">Line name</label>
+      <input type="text" id="lineName" placeholder="Circle Line">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="lineCode">Line code</label>
+        <input type="text" id="lineCode" placeholder="CC" maxlength="6">
+      </div>
+      <div class="field">
+        <label for="colorHex">Colour</label>
+        <div class="colorRow">
+          <input type="color" id="lineColor">
+          <input type="text" id="colorHex" placeholder="#fa9e0d" spellcheck="false">
+        </div>
+      </div>
+    </div>
+    <div class="swatches" id="swatches"></div>
+
+    <div class="sect">Layout</div>
+    <div class="row">
+      <div class="field">
+        <label for="layout">Shape</label>
+        <select id="layout">
+          <option value="horizontal">Horizontal strip</option>
+          <option value="snake">Snake (wrapped rows)</option>
+          <option value="vertical">Vertical list</option>
+          <option value="loop">Loop</option>
+        </select>
+      </div>
+      <div class="field" id="wrapField">
+        <label for="wrap">Stations per row</label>
+        <input type="number" id="wrap" min="2" max="40" step="1" value="12">
+      </div>
+    </div>
+    <div class="field">
+      <label for="spacing">Station spacing <span id="spacingOut" style="float:right;text-transform:none;letter-spacing:0">100</span></label>
+      <div class="slider"><input type="range" id="spacing" min="40" max="200" step="2" value="100"></div>
+    </div>
+    <div class="checks">
+      <label class="chk" id="closedField"><input type="checkbox" id="closed" checked> Closed loop (join last station back to first)</label>
+      <label class="chk"><input type="checkbox" id="showCodes" checked> Show station codes</label>
+      <label class="chk"><input type="checkbox" id="showIc" checked> Show interchange codes</label>
+      <label class="chk"><input type="checkbox" id="showBadge" checked> Show line name badge</label>
+      <label class="chk"><input type="checkbox" id="opaque" checked> White background (for PNG export)</label>
+    </div>
+
+    <div class="sect">Stations <span id="stationCount"></span></div>
+    <div class="field">
+      <textarea id="spec" rows="22" spellcheck="false"></textarea>
+      <p class="hint">
+        One station per line: <code>CODE  Station Name  &gt; IC1, IC2</code><br>
+        Everything after <code>&gt;</code> is interchange codes (auto-coloured by prefix).
+        Use <code>CODE | Name</code> if the name is ambiguous. <code>#</code> starts a comment.<br>
+        Start a branch with a header line:<br>
+        <code>[branch from CC4 up: Marina Bay Branch]</code><br>
+        Direction may be <code>up</code>/<code>down</code> (horizontal &amp; snake), <code>left</code>/<code>right</code>
+        (vertical), and is ignored for loops (branches point outward).
+        Add a hex colour at the end of the branch name to override its colour.
+      </p>
+      <div id="errors"></div>
+    </div>
+  </aside>
+
+  <main id="main"><div id="stage"></div></main>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Line Diagram Generator — MRT-style transit line diagrams
+   Layouts: horizontal strip · snake (wrapped) · vertical list · loop
+   Supports branches off any station, and auto-coloured interchange codes.
+   ========================================================================== */
+
+const SVGNS = "http://www.w3.org/2000/svg";
+
+/* ---------------------------------------------------------------- registry */
+/* Prefix -> colour, so interchange code boxes get the right line colour.
+   Edit freely; unknown prefixes fall back to the current line colour. */
+const LINE_COLOURS = {
+  NS:"#d42e12",                                  // North South
+  EW:"#009645", CG:"#009645",                    // East West + Changi branch
+  NE:"#9900aa",                                  // North East
+  CC:"#fa9e0d", CE:"#fa9e0d",                    // Circle + Marina Bay branch
+  DT:"#005ec4",                                  // Downtown
+  TE:"#9d5b25",                                  // Thomson-East Coast
+  JR:"#0099aa", JS:"#0099aa", JW:"#0099aa", JE:"#0099aa", // Jurong Region
+  CR:"#78be20", CP:"#78be20",                    // Cross Island
+  BP:"#718573", STC:"#718573", SW:"#718573", SE:"#718573",
+  PTC:"#718573", PW:"#718573", PE:"#718573"      // LRT lines
+};
+const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
+                 "#0099aa","#78be20","#718573","#e8467c","#00a1de","#1f2937"];
+
+function colourForCode(code, fallback){
+  const m = /^([A-Z]+)/.exec((code||"").toUpperCase());
+  return (m && LINE_COLOURS[m[1]]) || fallback;
+}
+
+/* ------------------------------------------------------------------- style */
+const STYLE = {
+  lineWidth:11,
+  markerR:8.5, markerW:4,
+  termR:10, termW:5.5,
+  icR:12, icW:4, icStroke:"#33383d",
+  nameSize:14, nameWeight:600, nameFill:"#1b1f24",
+  codeSize:10.5, codeH:17, codeGap:15,
+  turn:58,                       // snake U-turn overshoot
+  loopAspect:1.4, loopCorner:.28,
+  cap:26                         // overhang past a terminus
+};
+const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif';
+
+/* Rough text width; good enough for bounding boxes and label offsets. */
+const measure = (t, size) => (t ? t.length * size * 0.565 : 0);
+const codeBoxW = t => Math.max(28, t.length * 7.4 + 11);
+
+/* ------------------------------------------------------------------ parsing */
+function parseStation(s){
+  let left = s, ics = [];
+  const gi = s.indexOf(">");
+  if (gi >= 0){
+    left = s.slice(0, gi);
+    ics = s.slice(gi + 1).split(/[,;]+/).map(t => t.trim()).filter(Boolean);
+  }
+  left = left.trim();
+  let code = "", name = left;
+  if (left.includes("|")){
+    const p = left.split("|");
+    code = p[0].trim();
+    name = p.slice(1).join("|").trim();
+  } else {
+    const m = /^([A-Z]{1,4}\d{0,3}[A-Za-z]?)\s+(\S.*)$/.exec(left);
+    if (m){ code = m[1]; name = m[2].trim(); }
+    else if (/^[A-Z]{1,4}\d{0,3}[A-Za-z]?$/.test(left)){ code = left; name = ""; }
+  }
+  return { code, name, ics };
+}
+
+function parseSpec(text){
+  const errors = [];
+  const trunk = [];
+  const branches = [];
+  let cursor = trunk;
+
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const s = raw.trim();
+    if (!s || s.startsWith("#") || s.startsWith("//")) return;
+    if (s.startsWith("[")){
+      const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(up|down|left|right)?\s*(?::\s*(.*?))?\s*\]$/i.exec(s);
+      if (!m){
+        errors.push(`Line ${i+1}: expected <code>[branch from CODE up: Name]</code>`);
+        return;
+      }
+      let name = (m[3] || "").trim(), colour = null;
+      const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(name);
+      if (cm){ colour = cm[1]; name = name.slice(0, cm.index).trim(); }
+      const b = { from:m[1], dir:(m[2]||"").toLowerCase(), name, colour, stations:[], line:i+1 };
+      branches.push(b);
+      cursor = b.stations;
+      return;
+    }
+    cursor.push(parseStation(s));
+  });
+
+  if (!trunk.length && branches.length)
+    errors.push("A branch header appeared before any trunk stations.");
+
+  return { trunk, branches, errors };
+}
+
+/* -------------------------------------------------------------- svg helpers */
+function el(tag, attrs, parent){
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+function makeBBox(){
+  return {
+    x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity,
+    add(x, y){
+      if (x < this.x0) this.x0 = x;
+      if (y < this.y0) this.y0 = y;
+      if (x > this.x1) this.x1 = x;
+      if (y > this.y1) this.y1 = y;
+    },
+    rect(x, y, w, h){ this.add(x, y); this.add(x + w, y + h); },
+    /* baseline start + rotation, anchored 'start' or 'end' */
+    text(x, y, str, size, rot, anchor){
+      const w = measure(str, size), r = rot * Math.PI / 180;
+      const sgn = anchor === "end" ? -1 : 1;
+      const ex = x + Math.cos(r) * w * sgn, ey = y + Math.sin(r) * w * sgn;
+      this.add(x, y - size); this.add(x, y + size * .4);
+      this.add(ex, ey - size); this.add(ex, ey + size * .4);
+    }
+  };
+}
+
+/* Polyline with rounded corners (quadratic joins). */
+function roundedPath(pts, r){
+  if (pts.length < 2) return "";
+  const P = n => `${n[0].toFixed(2)} ${n[1].toFixed(2)}`;
+  let d = `M ${P(pts[0])}`;
+  for (let i = 1; i < pts.length - 1; i++){
+    const a = pts[i-1], c = pts[i], b = pts[i+1];
+    const l1 = Math.hypot(a[0]-c[0], a[1]-c[1]) || 1;
+    const l2 = Math.hypot(b[0]-c[0], b[1]-c[1]) || 1;
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    const p1 = [c[0] + (a[0]-c[0])/l1*rr, c[1] + (a[1]-c[1])/l1*rr];
+    const p2 = [c[0] + (b[0]-c[0])/l2*rr, c[1] + (b[1]-c[1])/l2*rr];
+    d += ` L ${P(p1)} Q ${P(c)} ${P(p2)}`;
+  }
+  d += ` L ${P(pts[pts.length-1])}`;
+  return d;
+}
+
+/* -------------------------------------------------------- racetrack (loop) */
+/* Arc-length parameterised rounded rectangle, clockwise from the top-left
+   corner's end. Gives point + outward normal at any distance t. */
+function racetrack(x0, y0, x1, y1, r){
+  const segs = [];
+  const line = (ax, ay, bx, by, nx, ny) =>
+    segs.push({ t:"L", ax, ay, bx, by, nx, ny, len:Math.hypot(bx-ax, by-ay) });
+  const arc = (cx, cy, a0, a1) =>
+    segs.push({ t:"A", cx, cy, r, a0, a1, len:r * Math.abs(a1 - a0) });
+  const D = Math.PI / 180;
+
+  line(x0+r, y0, x1-r, y0,  0, -1);
+  arc (x1-r, y0+r, -90*D, 0);
+  line(x1, y0+r, x1, y1-r,  1,  0);
+  arc (x1-r, y1-r, 0, 90*D);
+  line(x1-r, y1, x0+r, y1,  0,  1);
+  arc (x0+r, y1-r, 90*D, 180*D);
+  line(x0, y1-r, x0, y0+r, -1,  0);
+  arc (x0+r, y0+r, 180*D, 270*D);
+
+  const total = segs.reduce((s, g) => s + g.len, 0);
+
+  function at(t){
+    t = ((t % total) + total) % total;
+    for (const g of segs){
+      if (t <= g.len || g === segs[segs.length-1]){
+        const u = Math.min(1, g.len ? t / g.len : 0);
+        if (g.t === "L")
+          return { x:g.ax + (g.bx-g.ax)*u, y:g.ay + (g.by-g.ay)*u, nx:g.nx, ny:g.ny };
+        const a = g.a0 + (g.a1 - g.a0) * u;
+        return { x:g.cx + Math.cos(a)*g.r, y:g.cy + Math.sin(a)*g.r,
+                 nx:Math.cos(a), ny:Math.sin(a) };
+      }
+      t -= g.len;
+    }
+  }
+
+  /* Path string for the stretch of perimeter between t0 and t1. */
+  function path(t0, t1){
+    const F = n => n.toFixed(2);
+    const p0 = at(t0);
+    let d = `M ${F(p0.x)} ${F(p0.y)}`, walked = 0;
+    for (const g of segs){
+      const s = walked, e = walked + g.len;
+      walked = e;
+      const a = Math.max(t0, s), b = Math.min(t1, e);
+      if (b - a <= 0.01) continue;
+      if (g.t === "L"){
+        const u = (b - s) / g.len;
+        d += ` L ${F(g.ax + (g.bx-g.ax)*u)} ${F(g.ay + (g.by-g.ay)*u)}`;
+      } else {
+        const ua = (a - s) / g.len, ub = (b - s) / g.len;
+        const aa = g.a0 + (g.a1-g.a0)*ua, ab = g.a0 + (g.a1-g.a0)*ub;
+        const large = Math.abs(ab - aa) > Math.PI ? 1 : 0;
+        d += ` A ${F(g.r)} ${F(g.r)} 0 ${large} 1 ` +
+             `${F(g.cx + Math.cos(ab)*g.r)} ${F(g.cy + Math.sin(ab)*g.r)}`;
+      }
+    }
+    return d;
+  }
+
+  return { total, at, path };
+}
+
+/* ============================================================== the renderer
+   Returns { svg, width, height }. All paint attributes are inline so the
+   serialised SVG stands alone for download / PNG conversion. */
+function buildDiagram(cfg){
+  const { trunk, branches } = cfg;
+  const colour = cfg.colour;
+  const svg = el("svg", { xmlns:SVGNS, version:"1.1" });
+  const gLines   = el("g", { fill:"none", "stroke-linecap":"round", "stroke-linejoin":"round" }, svg);
+  const gLabels  = el("g", { "font-family":FONT }, svg);
+  const gMarkers = el("g", null, svg);
+  const bb = makeBBox();
+
+  /* ---- resolve nodes: trunk positions per layout, then branches ---- */
+  const nodes = [];   // {code,name,ics,x,y,kind,label}
+  const sp = cfg.spacing;
+
+  /* label spec helpers -------------------------------------------------- */
+  const DIAG  = { nameRot:-45, nameAnchor:"start", nameDX:11, nameDY:-13, codeDir:[0,1] };
+  const RIGHT = { nameRot:0,   nameAnchor:"start", codeDir:[1,0],  inline:true };
+  const LEFT  = { nameRot:0,   nameAnchor:"end",   codeDir:[-1,0], inline:true };
+  const UP    = { nameRot:-90, nameAnchor:"start", codeDir:[0,-1], inline:true };
+  const DOWN  = { nameRot:90,  nameAnchor:"start", codeDir:[0,1],  inline:true };
+  const VLIST = { nameRot:0,   nameAnchor:"start", nameDX:16, nameDY:5, codeDir:[-1,0] };
+  const sideFor = (nx, ny) =>
+    Math.abs(nx) >= Math.abs(ny) ? (nx > 0 ? RIGHT : LEFT) : (ny > 0 ? DOWN : UP);
+
+  let trunkPath = "";            // path 'd' for the trunk
+  let loop = null;               // racetrack, when layout === 'loop'
+
+  if (cfg.layout === "loop"){
+    const n = Math.max(trunk.length, 3);
+    const perim = n * sp;
+    const H = perim / (2*(STYLE.loopAspect - 2*STYLE.loopCorner)
+                       + 2*(1 - 2*STYLE.loopCorner)
+                       + 2*Math.PI*STYLE.loopCorner);
+    const W = H * STYLE.loopAspect, r = H * STYLE.loopCorner;
+    loop = racetrack(0, 0, W, H, r);
+    const step = loop.total / n;
+
+    trunk.forEach((st, i) => {
+      const p = loop.at(i * step);
+      nodes.push({ ...st, x:p.x, y:p.y, nx:p.nx, ny:p.ny, colour,
+                   kind: cfg.closed ? "" : (i === 0 || i === trunk.length-1 ? "term" : ""),
+                   label: sideFor(p.nx, p.ny) });
+    });
+    trunkPath = cfg.closed
+      ? loop.path(0, loop.total)
+      : loop.path(0, (trunk.length - 1) * step);
+
+  } else if (cfg.layout === "vertical"){
+    trunk.forEach((st, i) => {
+      nodes.push({ ...st, x:0, y:i * sp, colour, label:VLIST,
+                   kind: (i === 0 || i === trunk.length-1) ? "term" : "" });
+    });
+    trunkPath = roundedPath([[0, -STYLE.cap], [0, (trunk.length-1)*sp + STYLE.cap]], 0);
+
+  } else if (cfg.layout === "snake"){
+    const per = Math.max(2, cfg.wrap|0);
+    const rowH = Math.max(190, sp * 1.9);
+    const pts = [];
+    trunk.forEach((st, i) => {
+      const row = Math.floor(i / per), j = i % per;
+      const rtl = row % 2 === 1;
+      const xEnd = (per - 1) * sp;
+      const x = rtl ? xEnd - j * sp : j * sp;
+      const y = row * rowH;
+      if (j === 0){
+        if (row === 0) pts.push([x - STYLE.cap, y]);
+        else {
+          const over = rtl ? STYLE.turn : -STYLE.turn;
+          pts.push([x + over, y - rowH], [x + over, y]);
+        }
+      }
+      pts.push([x, y]);
+      nodes.push({ ...st, x, y, colour, label:DIAG,
+                   kind: (i === 0 || i === trunk.length-1) ? "term" : "" });
+    });
+    const last = nodes[nodes.length-1];
+    const lastRtl = Math.floor((trunk.length-1) / per) % 2 === 1;
+    if (last) pts.push([last.x + (lastRtl ? -STYLE.cap : STYLE.cap), last.y]);
+    trunkPath = roundedPath(pts, STYLE.turn);
+
+  } else { /* horizontal */
+    trunk.forEach((st, i) => {
+      nodes.push({ ...st, x:i * sp, y:0, colour, label:DIAG,
+                   kind: (i === 0 || i === trunk.length-1) ? "term" : "" });
+    });
+    trunkPath = roundedPath([[-STYLE.cap, 0], [(trunk.length-1)*sp + STYLE.cap, 0]], 0);
+  }
+
+  const trunkCount = nodes.length;
+  el("path", { d:trunkPath, stroke:colour, "stroke-width":STYLE.lineWidth }, gLines);
+
+  /* ---- branches ---- */
+  const warnings = [];
+  branches.forEach(b => {
+    if (!b.stations.length) return;
+    const key = b.from.toUpperCase();
+    let j = nodes.findIndex((n, i) => i < trunkCount &&
+      ((n.code || "").toUpperCase() === key || (n.name || "").toUpperCase() === key));
+    if (j < 0){
+      warnings.push(`Branch junction “${b.from}” not found — attached to the last station instead.`);
+      j = trunkCount - 1;
+    }
+    const jn = nodes[j];
+    const bc = b.colour || colour;
+    const gap = Math.max(sp * 1.25, 120);
+
+    if (cfg.layout === "loop"){
+      /* radial spur pointing away from the loop */
+      const side = sideFor(jn.nx, jn.ny);
+      b.stations.forEach((st, i) => {
+        const d = gap + i * sp;
+        nodes.push({ ...st, x:jn.x + jn.nx * d, y:jn.y + jn.ny * d, colour:bc, label:side,
+                     kind: i === b.stations.length-1 ? "term" : "", branch:b });
+      });
+      const lastD = gap + (b.stations.length-1) * sp + STYLE.cap;
+      el("path", { d:roundedPath([[jn.x, jn.y],
+                                  [jn.x + jn.nx*lastD, jn.y + jn.ny*lastD]], 0),
+                   stroke:bc, "stroke-width":STYLE.lineWidth }, gLines);
+
+    } else if (cfg.layout === "vertical"){
+      const sgn = b.dir === "left" ? -1 : 1;
+      const bx = jn.x + sgn * gap;
+      b.stations.forEach((st, i) => {
+        nodes.push({ ...st, x:bx, y:jn.y + gap + i * sp, colour:bc,
+                     label: sgn < 0 ? LEFT : VLIST,
+                     kind: i === b.stations.length-1 ? "term" : "", branch:b });
+      });
+      const endY = jn.y + gap + (b.stations.length-1)*sp + STYLE.cap;
+      el("path", { d:roundedPath([[jn.x, jn.y], [bx, jn.y + gap], [bx, endY]], 28),
+                   stroke:bc, "stroke-width":STYLE.lineWidth }, gLines);
+
+    } else {
+      const sgn = b.dir === "up" ? -1 : 1;
+      const by = jn.y + sgn * gap;
+      const rtl = cfg.layout === "snake" &&
+                  Math.floor(j / Math.max(2, cfg.wrap|0)) % 2 === 1;
+      const dx = (rtl ? -1 : 1);
+      const x0 = jn.x + dx * gap;                 // end of the 45° diagonal
+      b.stations.forEach((st, i) => {
+        nodes.push({ ...st, x:x0 + dx * (sp * .5 + i * sp), y:by, colour:bc, label:DIAG,
+                     kind: i === b.stations.length-1 ? "term" : "", branch:b });
+      });
+      const endX = x0 + dx * (sp * .5 + (b.stations.length-1)*sp + STYLE.cap);
+      el("path", { d:roundedPath([[jn.x, jn.y], [x0, by], [endX, by]], 26),
+                   stroke:bc, "stroke-width":STYLE.lineWidth }, gLines);
+    }
+  });
+
+  /* ---- labels + markers ---- */
+  nodes.forEach(n => {
+    const L = n.label;
+    const codes = [];
+    if (cfg.showCodes && n.code) codes.push({ t:n.code, c:n.colour });
+    if (cfg.showIc) n.ics.forEach(c => codes.push({ t:c, c:colourForCode(c, n.colour) }));
+
+    /* code boxes march outward along codeDir; own code sits closest */
+    const dir = L.codeDir;
+    const horiz = Math.abs(dir[0]) > Math.abs(dir[1]);
+    let off = STYLE.codeGap;
+    codes.forEach(cd => {
+      const w = codeBoxW(cd.t), h = STYLE.codeH;
+      const step = horiz ? w + 4 : h + 3;
+      const cx = n.x + dir[0] * (off + step / 2);
+      const cy = n.y + dir[1] * (off + step / 2);
+      el("rect", { x:(cx - w/2).toFixed(2), y:(cy - h/2).toFixed(2), width:w, height:h,
+                   rx:4, fill:cd.c }, gLabels);
+      const tx = el("text", { x:cx.toFixed(2), y:(cy + 3.9).toFixed(2), "text-anchor":"middle",
+                              "font-size":STYLE.codeSize, "font-weight":700, fill:"#fff",
+                              "letter-spacing":".3" }, gLabels);
+      tx.textContent = cd.t;
+      bb.rect(cx - w/2, cy - h/2, w, h);
+      off += step;
+    });
+    const codesExtent = codes.length ? off : 0;
+
+    /* station name */
+    if (n.name){
+      let nx, ny;
+      if (L.inline){
+        const d = (codesExtent || STYLE.codeGap) + 7;
+        nx = n.x + dir[0] * d;
+        ny = n.y + dir[1] * d + (horiz ? 4.6 : 0);
+      } else {
+        nx = n.x + (L.nameDX || 0);
+        ny = n.y + (L.nameDY || 0);
+      }
+      const t = el("text", {
+        x:nx.toFixed(2), y:ny.toFixed(2),
+        "text-anchor":L.nameAnchor,
+        "font-size":STYLE.nameSize,
+        "font-weight": n.kind === "term" ? 750 : (n.ics.length ? 700 : STYLE.nameWeight),
+        fill:STYLE.nameFill,
+        transform: L.nameRot ? `rotate(${L.nameRot} ${nx.toFixed(2)} ${ny.toFixed(2)})` : null
+      }, gLabels);
+      t.textContent = n.name;
+      bb.text(nx, ny, n.name, STYLE.nameSize, L.nameRot, L.nameAnchor);
+    }
+
+    /* marker */
+    const isIC = n.ics.length > 0;
+    const r = isIC ? STYLE.icR : (n.kind === "term" ? STYLE.termR : STYLE.markerR);
+    const sw = isIC ? STYLE.icW : (n.kind === "term" ? STYLE.termW : STYLE.markerW);
+    el("circle", { cx:n.x.toFixed(2), cy:n.y.toFixed(2), r, fill:"#fff",
+                   stroke: isIC ? STYLE.icStroke : n.colour, "stroke-width":sw }, gMarkers);
+    bb.add(n.x - r - sw, n.y - r - sw);
+    bb.add(n.x + r + sw, n.y + r + sw);
+  });
+
+  /* branch name labels, at the far end of each branch */
+  branches.forEach(b => {
+    if (!b.name || !b.stations.length) return;
+    const last = nodes.filter(n => n.branch === b).pop();
+    if (!last) return;
+    const y = last.y + 46, x = last.x;
+    const t = el("text", { x:x.toFixed(2), y:y.toFixed(2), "text-anchor":"middle",
+                           "font-size":11.5, "font-weight":700, fill:"#8a9099",
+                           "letter-spacing":".06em" }, gLabels);
+    t.textContent = b.name.toUpperCase();
+    bb.text(x - measure(b.name, 11.5)/2, y, b.name, 11.5, 0, "start");
+  });
+
+  if (!isFinite(bb.x0)) bb.rect(0, 0, 10, 10);
+
+  /* ---- header badge ---- */
+  if (cfg.showBadge && (cfg.name || cfg.code)){
+    const g = el("g", { "font-family":FONT }, svg);
+    const bx = bb.x0, by = bb.y0 - 58;
+    let x = bx;
+    if (cfg.code){
+      const w = Math.max(42, cfg.code.length * 12 + 20);
+      el("rect", { x:bx, y:by, width:w, height:36, rx:7, fill:colour }, g);
+      const t = el("text", { x:bx + w/2, y:by + 24.5, "text-anchor":"middle",
+                             "font-size":17, "font-weight":800, fill:"#fff",
+                             "letter-spacing":".5" }, g);
+      t.textContent = cfg.code;
+      bb.rect(bx, by, w, 36);
+      x = bx + w + 13;
+    }
+    if (cfg.name){
+      const t = el("text", { x:x, y:by + 25.5, "font-size":23, "font-weight":750,
+                             fill:STYLE.nameFill, "letter-spacing":"-.01em" }, g);
+      t.textContent = cfg.name;
+      bb.text(x, by + 25.5, cfg.name, 23, 0, "start");
+    }
+  }
+
+  /* ---- frame ---- */
+  const pad = 26;
+  const x0 = bb.x0 - pad, y0 = bb.y0 - pad;
+  const w  = (bb.x1 - bb.x0) + pad*2, h = (bb.y1 - bb.y0) + pad*2;
+  svg.setAttribute("viewBox", `${x0.toFixed(2)} ${y0.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
+  svg.setAttribute("width", Math.ceil(w));
+  svg.setAttribute("height", Math.ceil(h));
+  if (cfg.opaque){
+    const bg = el("rect", { x:x0, y:y0, width:w, height:h, fill:"#ffffff" });
+    svg.insertBefore(bg, svg.firstChild);
+  }
+  return { svg, width:w, height:h, warnings };
+}
+
+/* ================================================================== the app */
+const $ = id => document.getElementById(id);
+const S = {
+  spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
+  hex:$("colorHex"), layout:$("layout"), wrap:$("wrap"), spacing:$("spacing"),
+  closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"),
+  showBadge:$("showBadge"), opaque:$("opaque")
+};
+let zoom = 1, current = null;
+
+const SPACING_DEFAULT = { horizontal:100, snake:100, vertical:56, loop:104 };
+
+const EXAMPLES = {
+  ns:{
+    name:"North South Line", code:"NS", colour:"#d42e12", layout:"horizontal", spacing:100,
+    spec:`NS1  Jurong East        > EW24, JE5
+NS2  Bukit Batok
+NS3  Bukit Gombak
+NS4  Choa Chu Kang      > BP1, JS1
+NS5  Yew Tee
+NS7  Kranji
+NS8  Marsiling
+NS9  Woodlands          > TE2
+NS10 Admiralty
+NS11 Sembawang
+NS12 Canberra
+NS13 Yishun
+NS14 Khatib
+NS15 Yio Chu Kang
+NS16 Ang Mo Kio
+NS17 Bishan             > CC15
+NS18 Braddell
+NS19 Toa Payoh
+NS20 Novena
+NS21 Newton             > DT11
+NS22 Orchard            > TE14
+NS23 Somerset
+NS24 Dhoby Ghaut        > NE6, CC1
+NS25 City Hall          > EW13
+NS26 Raffles Place      > EW14
+NS27 Marina Bay         > CE2, TE20
+NS28 Marina South Pier`
+  },
+  ew:{
+    name:"East West Line", code:"EW", colour:"#009645", layout:"snake", wrap:12, spacing:100,
+    spec:`EW1  Pasir Ris
+EW2  Tampines           > DT32
+EW3  Simei
+EW4  Tanah Merah
+EW5  Bedok
+EW6  Kembangan
+EW7  Eunos
+EW8  Paya Lebar         > CC9
+EW9  Aljunied
+EW10 Kallang
+EW11 Lavender
+EW12 Bugis              > DT14
+EW13 City Hall          > NS25
+EW14 Raffles Place      > NS26
+EW15 Tanjong Pagar
+EW16 Outram Park        > NE3, TE17
+EW17 Tiong Bahru
+EW18 Redhill
+EW19 Queenstown
+EW20 Commonwealth
+EW21 Buona Vista        > CC22
+EW22 Dover
+EW23 Clementi
+EW24 Jurong East        > NS1, JE5
+EW25 Chinese Garden
+EW26 Lakeside
+EW27 Boon Lay           > JS?
+EW28 Pioneer
+EW29 Joo Koon
+EW30 Gul Circle
+EW31 Tuas Crescent
+EW32 Tuas West Road
+EW33 Tuas Link
+
+[branch from EW4 down: Changi Airport Branch]
+CG1  Expo               > DT35
+CG2  Changi Airport`
+  },
+  cc:{
+    name:"Circle Line", code:"CC", colour:"#fa9e0d", layout:"loop", spacing:104, closed:false,
+    spec:`CC1  Dhoby Ghaut        > NS24, NE6
+CC2  Bras Basah
+CC3  Esplanade
+CC4  Promenade          > DT15
+CC5  Nicoll Highway
+CC6  Stadium
+CC7  Mountbatten
+CC8  Dakota
+CC9  Paya Lebar         > EW8
+CC10 MacPherson         > DT26
+CC11 Tai Seng
+CC12 Bartley
+CC13 Serangoon          > NE12
+CC14 Lorong Chuan
+CC15 Bishan             > NS17
+CC16 Marymount
+CC17 Caldecott          > TE9
+CC19 Botanic Gardens    > DT9
+CC20 Farrer Road
+CC21 Holland Village
+CC22 Buona Vista        > EW21
+CC23 one-north
+CC24 Kent Ridge
+CC25 Haw Par Villa
+CC26 Pasir Panjang
+CC27 Labrador Park
+CC28 Telok Blangah
+CC29 HarbourFront       > NE1
+
+[branch from CC4: Marina Bay Branch]
+CE1  Bayfront           > DT16
+CE2  Marina Bay         > NS27, TE20`
+  },
+  ne:{
+    name:"North East Line", code:"NE", colour:"#9900aa", layout:"vertical", spacing:56,
+    spec:`NE1  HarbourFront        > CC29
+NE3  Outram Park        > EW16, TE17
+NE4  Chinatown          > DT19
+NE5  Clarke Quay
+NE6  Dhoby Ghaut        > NS24, CC1
+NE7  Little India       > DT12
+NE8  Farrer Park
+NE9  Boon Keng
+NE10 Potong Pasir
+NE11 Woodleigh
+NE12 Serangoon          > CC13
+NE13 Kovan
+NE14 Hougang            > CR8
+NE15 Buangkok
+NE16 Sengkang           > STC
+NE17 Punggol            > PTC`
+  },
+  blank:{
+    name:"My Line", code:"ML", colour:"#005ec4", layout:"horizontal", spacing:100,
+    spec:`# CODE  Station name  > interchange codes
+ML1  First Station
+ML2  Second Station     > NS1
+ML3  Third Station
+ML4  Fourth Station
+
+[branch from ML2 down: Branch Name]
+MB1  Branch Station One
+MB2  Branch Terminus`
+  }
+};
+
+/* --------------------------------------------------------------- read/write */
+function readForm(){
+  const parsed = parseSpec(S.spec.value);
+  return {
+    name:S.name.value.trim(), code:S.code.value.trim().toUpperCase(),
+    colour:S.colour.value, layout:S.layout.value,
+    wrap:Math.max(2, parseInt(S.wrap.value, 10) || 12),
+    spacing:parseInt(S.spacing.value, 10) || 100,
+    closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
+    showBadge:S.showBadge.checked, opaque:S.opaque.checked,
+    trunk:parsed.trunk, branches:parsed.branches, errors:parsed.errors
+  };
+}
+
+function applyConfig(c){
+  S.name.value = c.name || "";
+  S.code.value = c.code || "";
+  setColour(c.colour || "#005ec4");
+  S.layout.value = c.layout || "horizontal";
+  S.wrap.value = c.wrap || 12;
+  S.spacing.value = c.spacing || SPACING_DEFAULT[S.layout.value] || 100;
+  S.closed.checked = c.closed !== false;
+  S.showCodes.checked = c.showCodes !== false;
+  S.showIc.checked = c.showIc !== false;
+  S.showBadge.checked = c.showBadge !== false;
+  S.opaque.checked = c.opaque !== false;
+  S.spec.value = c.spec || "";
+  syncVisibility();
+  render();
+  fit();
+}
+
+function setColour(hex){ S.colour.value = hex; S.hex.value = hex; }
+
+function syncVisibility(){
+  const l = S.layout.value;
+  $("wrapField").style.display   = l === "snake" ? "" : "none";
+  $("closedField").style.display = l === "loop"  ? "" : "none";
+  $("spacingOut").textContent = S.spacing.value;
+}
+
+/* ------------------------------------------------------------------- render */
+function render(){
+  const cfg = readForm();
+  const errs = [...cfg.errors];
+
+  if (!cfg.trunk.length){
+    $("stage").innerHTML = "";
+    showErrors(errs.length ? errs : ["Add at least one station to draw a diagram."]);
+    $("stationCount").textContent = "";
+    current = null;
+    return;
+  }
+
+  let out;
+  try {
+    out = buildDiagram(cfg);
+  } catch (e){
+    showErrors([...errs, "Render failed: " + e.message]);
+    return;
+  }
+  errs.push(...out.warnings);
+
+  const stage = $("stage");
+  stage.innerHTML = "";
+  stage.appendChild(out.svg);
+  current = out;
+  applyZoom();
+
+  const nBranch = cfg.branches.reduce((s, b) => s + b.stations.length, 0);
+  $("stationCount").textContent =
+    `${cfg.trunk.length} station${cfg.trunk.length === 1 ? "" : "s"}` +
+    (nBranch ? ` + ${nBranch} on ${cfg.branches.length} branch${cfg.branches.length === 1 ? "" : "es"}` : "");
+  showErrors(errs);
+  save();
+}
+
+function showErrors(list){
+  const box = $("errors");
+  if (!list.length){ box.style.display = "none"; box.innerHTML = ""; return; }
+  box.style.display = "block";
+  box.innerHTML = list.length === 1 ? list[0]
+    : "<ul>" + list.map(e => `<li>${e}</li>`).join("") + "</ul>";
+}
+
+/* --------------------------------------------------------------------- zoom */
+function applyZoom(){
+  if (!current) return;
+  current.svg.setAttribute("width",  Math.ceil(current.width  * zoom));
+  current.svg.setAttribute("height", Math.ceil(current.height * zoom));
+  $("zoomLabel").textContent = Math.round(zoom * 100) + "%";
+}
+function setZoom(z){ zoom = Math.min(4, Math.max(.08, z)); applyZoom(); }
+function fit(){
+  if (!current) return;
+  const m = $("main");
+  const avail = m.clientWidth - 60, availH = m.clientHeight - 60;
+  setZoom(Math.min(1, avail / current.width, availH / current.height));
+}
+
+/* ------------------------------------------------------------------ exports */
+function serialize(){
+  if (!current) return null;
+  const clone = current.svg.cloneNode(true);
+  clone.setAttribute("width",  Math.ceil(current.width));
+  clone.setAttribute("height", Math.ceil(current.height));
+  clone.setAttribute("xmlns", SVGNS);
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+         new XMLSerializer().serializeToString(clone);
+}
+function slug(){
+  const c = readForm();
+  return (c.name || c.code || "line-diagram").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+         .replace(/^-|-$/g, "") || "line-diagram";
+}
+function download(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+$("dlSvg").onclick = () => {
+  const s = serialize();
+  if (s) download(new Blob([s], { type:"image/svg+xml" }), slug() + ".svg");
+};
+
+$("dlPng").onclick = () => {
+  const s = serialize();
+  if (!s) return;
+  const scale = 2;
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement("canvas");
+    cv.width  = Math.ceil(current.width  * scale);
+    cv.height = Math.ceil(current.height * scale);
+    const ctx = cv.getContext("2d");
+    if (readForm().opaque){ ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); }
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    cv.toBlob(b => b && download(b, slug() + ".png"), "image/png");
+  };
+  img.onerror = () => showErrors(["Could not rasterise to PNG — the SVG download still works."]);
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
+};
+
+$("dlJson").onclick = () => {
+  const c = readForm();
+  const data = {
+    name:c.name, code:c.code, colour:c.colour, layout:c.layout, wrap:c.wrap,
+    spacing:c.spacing, closed:c.closed, showCodes:c.showCodes, showIc:c.showIc,
+    showBadge:c.showBadge, opaque:c.opaque, spec:S.spec.value
+  };
+  download(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }),
+           slug() + ".json");
+};
+
+$("upJson").onclick = () => $("fileInput").click();
+$("fileInput").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try { applyConfig(JSON.parse(r.result)); }
+    catch (err){ showErrors(["That file isn't valid diagram JSON: " + err.message]); }
+  };
+  r.readAsText(f);
+  e.target.value = "";
+};
+
+/* --------------------------------------------------------------- persistence */
+const KEY = "lineDiagramGenerator.v1";
+function save(){
+  try {
+    localStorage.setItem(KEY, JSON.stringify({
+      name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
+      wrap:S.wrap.value, spacing:S.spacing.value, closed:S.closed.checked,
+      showCodes:S.showCodes.checked, showIc:S.showIc.checked,
+      showBadge:S.showBadge.checked, opaque:S.opaque.checked, spec:S.spec.value
+    }));
+  } catch (e){ /* storage disabled — no problem */ }
+}
+
+/* ------------------------------------------------------------------- wiring */
+SWATCHES.forEach(c => {
+  const b = document.createElement("button");
+  b.className = "sw"; b.style.background = c; b.title = c;
+  b.onclick = () => { setColour(c); render(); };
+  $("swatches").appendChild(b);
+});
+
+["input", "change"].forEach(ev => {
+  [S.name, S.code, S.spec, S.wrap, S.showCodes, S.showIc, S.showBadge, S.opaque, S.closed]
+    .forEach(n => n.addEventListener(ev, render));
+});
+S.colour.addEventListener("input", () => { S.hex.value = S.colour.value; render(); });
+S.hex.addEventListener("input", () => {
+  const v = S.hex.value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)){ S.colour.value = v; render(); }
+});
+S.spacing.addEventListener("input", () => { $("spacingOut").textContent = S.spacing.value; render(); });
+S.layout.addEventListener("change", () => {
+  S.spacing.value = SPACING_DEFAULT[S.layout.value] || 100;
+  syncVisibility(); render(); fit();
+});
+$("preset").addEventListener("change", e => {
+  const ex = EXAMPLES[e.target.value];
+  if (ex) applyConfig(ex);
+  e.target.value = "";
+});
+$("zoomIn").onclick  = () => setZoom(zoom * 1.25);
+$("zoomOut").onclick = () => setZoom(zoom / 1.25);
+$("zoomFit").onclick = fit;
+$("main").addEventListener("wheel", e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1/1.1));
+}, { passive:false });
+
+/* ------------------------------------------------------------------- startup */
+let boot = null;
+try { boot = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e){}
+applyConfig(boot || EXAMPLES.cc);
+</script>
+</body>
+</html>
