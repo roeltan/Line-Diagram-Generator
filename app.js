@@ -516,10 +516,17 @@ function buildDiagram(cfg){
     /* shuttle mode: if a caplet label was explicitly given, the junction
        becomes an "interchange" showing it as an extra caplet. Without one,
        the junction just keeps its own code — some shuttles (e.g. Tengah)
-       aren't shown as an interchange at all in real life. */
+       aren't shown as an interchange at all in real life. A shuttle caplet
+       is still the same physical line, just a shuttle spur of it — not a
+       separate interchanging line — so it's tracked separately and kept
+       out of the legend even when it doesn't happen to share a LINE_INFO
+       name with the current line. */
     if (shuttle){
       const label = (b.shuttleLabel || "").trim();
-      if (label) jn.ics = [...jn.ics, label];
+      if (label){
+        jn.ics = [...jn.ics, label];
+        jn.shuttleIcs = [...(jn.shuttleIcs || []), label];
+      }
     }
 
     if (cfg.layout === "loop"){
@@ -810,6 +817,7 @@ function buildDiagram(cfg){
      no need to guess it via the LINE_INFO prefix table */
   if (cfg.name || cfg.code) pushLegend(cfg.name || cfg.code, colour, cfg.code || cfg.name);
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(code => {
+    if (n.shuttleIcs && n.shuttleIcs.includes(code)) return;   // shuttle spur of this same line, not a separate interchange
     const m = /^([A-Za-z]+)/.exec(code || "");
     const prefix = m ? m[1].toUpperCase() : (code || "").toUpperCase();
     const info = LINE_INFO[prefix];
