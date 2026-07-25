@@ -268,7 +268,7 @@ function buildDiagram(cfg){
   const sp = cfg.spacing;
 
   /* label spec helpers -------------------------------------------------- */
-  const DIAG  = { nameRot:-45, nameAnchor:"start", nameDX:11, nameDY:-13, codeDir:[0,1] };
+  const DIAG  = { nameRot:-45, nameAnchor:"start", nameDX:0, nameDY:-13, codeDir:[0,1] };
   const RIGHT = { nameRot:0,   nameAnchor:"start",  codeDir:[1,0],  inline:true };
   const LEFT  = { nameRot:0,   nameAnchor:"end",    codeDir:[-1,0], inline:true };
   const UP    = { nameRot:0,   nameAnchor:"middle", codeDir:[0,-1], inline:true };
