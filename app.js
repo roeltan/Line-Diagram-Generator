@@ -39,13 +39,23 @@ function colourForCode(code, fallback){
   return (info && info.colour) || fallback;
 }
 
+/* Picks white or dark text for legibility against a given caplet/badge
+   background colour (e.g. Circle Line's light orange needs dark text). */
+function contrastText(hex){
+  const c = (hex || "").replace("#", "");
+  if (c.length !== 6) return "#fff";
+  const r = parseInt(c.slice(0,2), 16), g = parseInt(c.slice(2,4), 16), b = parseInt(c.slice(4,6), 16);
+  const yiq = (r*299 + g*587 + b*114) / 1000;
+  return yiq >= 150 ? "#1b1f24" : "#ffffff";
+}
+
 /* ------------------------------------------------------------------- style */
 const STYLE = {
   lineWidth:6,
   icStroke:"#33383d",
   nameSize:14, nameWeight:600, nameFill:"#1b1f24",
   codeSize:10.5, codeH:20, codeGap:14,
-  capletOutline:"#ffffff", capletOutlineW:2
+  capletOutlineW:2
 };
 const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif';
 
@@ -256,6 +266,8 @@ function racetrack(x0, y0, x1, y1, r){
 function buildDiagram(cfg){
   const { trunk, branches } = cfg;
   const colour = cfg.colour;
+  const textColour = cfg.dark ? "#e8eaed" : STYLE.nameFill;
+  const bgColour = cfg.dark ? "#15181c" : "#ffffff";
   const svg = el("svg", { xmlns:SVGNS, version:"1.1" });
   const gLines   = el("g", { fill:"none", "stroke-linecap":"round", "stroke-linejoin":"round" }, svg);
   const gLabels  = el("g", { "font-family":FONT }, svg);
@@ -409,9 +421,9 @@ function buildDiagram(cfg){
           cx = n.x;
         }
         el("rect", { x:F2(cx - w/2), y:F2(cy - h/2), width:F2(w), height:F2(h), rx:F2(h/2),
-                     fill:cd.c, stroke:STYLE.capletOutline, "stroke-width":STYLE.capletOutlineW }, gLabels);
+                     fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
-                                "font-size":STYLE.codeSize, "font-weight":700, fill:"#fff",
+                                "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(cd.c),
                                 "letter-spacing":".3" }, gLabels);
         tx.textContent = cd.t;
         bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
@@ -440,7 +452,7 @@ function buildDiagram(cfg){
         "text-anchor":L.nameAnchor,
         "font-size":STYLE.nameSize,
         "font-weight":STYLE.nameWeight,
-        fill:STYLE.nameFill,
+        fill:textColour,
         transform: L.nameRot ? `rotate(${L.nameRot} ${F2(nx)} ${F2(ny)})` : null
       }, gLabels);
       t.textContent = n.name;
@@ -497,10 +509,10 @@ function buildDiagram(cfg){
       if (lx + w > rowMaxX && lx > bb.x0){ lx = bb.x0; ly += 26; }
       el("rect", { x:F2(lx), y:F2(ly - lh/2), width:F2(capW), height:F2(lh), rx:F2(lh/2), fill:it.colour }, g);
       const capText = el("text", { x:F2(lx + capW/2), y:F2(ly + lh*0.22), "text-anchor":"middle",
-                                   "font-size":F2(capFont), "font-weight":700, fill:"#fff", "letter-spacing":".3" }, g);
+                                   "font-size":F2(capFont), "font-weight":700, fill:contrastText(it.colour), "letter-spacing":".3" }, g);
       capText.textContent = it.acr;
       const t = el("text", { x:F2(lx + capW + 8), y:F2(ly + 4.2), "font-size":legendTextSize, "font-weight":600,
-                             fill:STYLE.nameFill }, g);
+                             fill:textColour }, g);
       t.textContent = it.name;
       bb.rect(lx, ly - lh/2, w - 6, lh);
       lx += w;
@@ -514,9 +526,9 @@ function buildDiagram(cfg){
     let x = bx;
     if (cfg.code){
       const w = Math.max(42, cfg.code.length * 12 + 20);
-      el("rect", { x:bx, y:by, width:w, height:36, rx:7, fill:colour }, g);
+      el("rect", { x:bx, y:by, width:w, height:36, rx:18, fill:colour }, g);
       const t = el("text", { x:bx + w/2, y:by + 24.5, "text-anchor":"middle",
-                             "font-size":17, "font-weight":800, fill:"#fff",
+                             "font-size":17, "font-weight":800, fill:contrastText(colour),
                              "letter-spacing":".5" }, g);
       t.textContent = cfg.code;
       bb.rect(bx, by, w, 36);
@@ -524,7 +536,7 @@ function buildDiagram(cfg){
     }
     if (cfg.name){
       const t = el("text", { x:x, y:by + 25.5, "font-size":23, "font-weight":750,
-                             fill:STYLE.nameFill, "letter-spacing":"-.01em" }, g);
+                             fill:textColour, "letter-spacing":"-.01em" }, g);
       t.textContent = cfg.name;
       bb.text(x, by + 25.5, cfg.name, 23, 0, "start");
     }
@@ -538,7 +550,7 @@ function buildDiagram(cfg){
   svg.setAttribute("width", Math.ceil(w));
   svg.setAttribute("height", Math.ceil(h));
   if (cfg.opaque){
-    const bg = el("rect", { x:x0, y:y0, width:w, height:h, fill:"#ffffff" });
+    const bg = el("rect", { x:x0, y:y0, width:w, height:h, fill: cfg.dark ? "#15181c" : "#ffffff" });
     svg.insertBefore(bg, svg.firstChild);
   }
   return { svg, width:w, height:h, warnings };
@@ -833,6 +845,7 @@ function readForm(){
     spacing:parseInt(S.spacing.value, 10) || 100,
     closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
     showBadge:S.showBadge.checked, opaque:S.opaque.checked,
+    dark: document.documentElement.getAttribute("data-theme") === "dark",
     trunk, branches, errors
   };
 }
@@ -1077,6 +1090,16 @@ function fit(){
   const avail = m.clientWidth - 60, availH = m.clientHeight - 60;
   setZoom(Math.min(1, avail / current.width, availH / current.height));
 }
+function fitWidth(){
+  if (!current) return;
+  const avail = $("main").clientWidth - 60;
+  setZoom(Math.min(1, avail / current.width));
+}
+function fitHeight(){
+  if (!current) return;
+  const availH = $("main").clientHeight - 60;
+  setZoom(Math.min(1, availH / current.height));
+}
 
 /* ------------------------------------------------------------------ exports */
 function serialize(){
@@ -1215,7 +1238,8 @@ PRESET_META.forEach(p => {
 
 $("zoomIn").onclick  = () => setZoom(zoom * 1.25);
 $("zoomOut").onclick = () => setZoom(zoom / 1.25);
-$("zoomFit").onclick = fit;
+$("fitWidth").onclick = fitWidth;
+$("fitHeight").onclick = fitHeight;
 $("main").addEventListener("wheel", e => {
   if (!e.ctrlKey) return;
   e.preventDefault();
@@ -1231,6 +1255,7 @@ function applyTheme(t){
 $("themeToggle").onclick = () => {
   const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
   applyTheme(next);
+  render();
 };
 let savedTheme = null;
 try { savedTheme = localStorage.getItem("theme"); } catch (e){}
