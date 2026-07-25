@@ -331,7 +331,7 @@ function buildDiagram(cfg){
     const jn = nodes[j];
     const bc = b.colour || colour;
     const gap = Math.max(sp * 1.25, 120);
-    const run = Math.max(sp * 0.9, 70);   // length of the smooth curve near the junction
+    const run = Math.max(sp * 1.6, 130);   // length of the smooth curve near the junction
     const F = v => v.toFixed(2);
 
     if (cfg.layout === "loop"){
