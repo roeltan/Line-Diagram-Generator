@@ -26,9 +26,9 @@ const LINE_INFO = {
   JR:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
   CR:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
   CP:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
-  BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BPLRT" },
-  STC:{ name:"Sengkang LRT", colour:"#718573", acr:"SKLRT" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"SKLRT" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"SKLRT" },
-  PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PGLRT" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PGLRT" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PGLRT" }
+  BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
+  STC:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" },
+  PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
@@ -479,19 +479,24 @@ function buildDiagram(cfg){
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(c => addLegend(c, colour)));
 
   if (legendItems.length > 1 || (legendItems.length === 1 && cfg.code)){
+    /* Caplets here match the diagram's own caplet proportions (same height
+       and text size), just scaled to the legend's own label text size. */
+    const legendTextSize = 11.5;
+    const legendScale = legendTextSize / STYLE.nameSize;
+    const lh = STYLE.codeH * legendScale;
+    const capFont = STYLE.codeSize * legendScale;
     const g = el("g", { "font-family":FONT }, svg);
-    const lh = 17;
     let lx = bb.x0, ly = bb.y1 + 36;
     const rowMaxX = bb.x0 + Math.max(bb.x1 - bb.x0, 480);
     legendItems.forEach(it => {
-      const capW = codeBoxW(it.acr);
-      const w = capW + 8 + measure(it.name, 11.5) + 18;
+      const capW = codeBoxW(it.acr) * legendScale;
+      const w = capW + 8 + measure(it.name, legendTextSize) + 18;
       if (lx + w > rowMaxX && lx > bb.x0){ lx = bb.x0; ly += 26; }
       el("rect", { x:F2(lx), y:F2(ly - lh/2), width:F2(capW), height:F2(lh), rx:F2(lh/2), fill:it.colour }, g);
-      const capText = el("text", { x:F2(lx + capW/2), y:F2(ly + 3.6), "text-anchor":"middle",
-                                   "font-size":9.5, "font-weight":700, fill:"#fff", "letter-spacing":".3" }, g);
+      const capText = el("text", { x:F2(lx + capW/2), y:F2(ly + lh*0.22), "text-anchor":"middle",
+                                   "font-size":F2(capFont), "font-weight":700, fill:"#fff", "letter-spacing":".3" }, g);
       capText.textContent = it.acr;
-      const t = el("text", { x:F2(lx + capW + 8), y:F2(ly + 4.2), "font-size":11.5, "font-weight":600,
+      const t = el("text", { x:F2(lx + capW + 8), y:F2(ly + 4.2), "font-size":legendTextSize, "font-weight":600,
                              fill:STYLE.nameFill }, g);
       t.textContent = it.name;
       bb.rect(lx, ly - lh/2, w - 6, lh);
@@ -562,7 +567,7 @@ const PRESET_META = [
 
 const EXAMPLES = {
   ns:{
-    name:"North South Line", code:"NS", colour:"#d42e12", layout:"horizontal", spacing:100,
+    name:"North South Line", code:"NSL", colour:"#d42e12", layout:"horizontal", spacing:100,
     spec:`NS1  Jurong East        > EW24
 NS2  Bukit Batok
 NS3  Bukit Gombak
@@ -592,7 +597,7 @@ NS27 Marina Bay         > CC33, TE20
 NS28 Marina South Pier`
   },
   ew:{
-    name:"East West Line", code:"EW", colour:"#009645", layout:"horizontal", spacing:100,
+    name:"East West Line", code:"EWL", colour:"#009645", layout:"horizontal", spacing:100,
     spec:`EW1  Pasir Ris
 EW2  Tampines           > DT32
 EW3  Simei
@@ -637,7 +642,7 @@ CG2  Changi Airport`
        (CE1/CE2) into CC33/CC34. The loop itself now runs CC4→CC34→back to
        CC4; Dhoby Ghaut/Bras Basah/Esplanade (CC1-CC3) are a short spur off
        Promenade (CC4) — a real example of a loop layout with a branch. */
-    name:"Circle Line", code:"CC", colour:"#fa9e0d", layout:"loop", spacing:104, closed:true,
+    name:"Circle Line", code:"CCL", colour:"#fa9e0d", layout:"loop", spacing:104, closed:true,
     spec:`CC4  Promenade          > DT15
 CC5  Nicoll Highway
 CC6  Stadium
@@ -675,7 +680,7 @@ CC2  Bras Basah
 CC1  Dhoby Ghaut        > NS24, NE6`
   },
   ne:{
-    name:"North East Line", code:"NE", colour:"#9900aa", layout:"horizontal", spacing:100,
+    name:"North East Line", code:"NEL", colour:"#9900aa", layout:"horizontal", spacing:100,
     spec:`NE1  HarbourFront        > CC29
 NE3  Outram Park        > EW16, TE17
 NE4  Chinatown          > DT19
