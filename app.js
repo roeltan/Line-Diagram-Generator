@@ -267,20 +267,24 @@ function drawOsiConnector(el, parent, x0, y0, x1, y1, thickness, colourA, colour
 }
 
 /* -------------------------------------------------------- stadium (loop) */
-/* Arc-length parameterised stadium/pill outline (two straight edges joined
-   by semicircle end-caps — built as a degenerate rounded rect with
-   r = height/2, so the "side" edges collapse to zero length). Gives point
-   + outward normal at any distance t around the full perimeter (`at`), or
-   restricted to just the straight top/bottom edges (`atStraight`) so
-   stations never land on the curved caps. */
+/* Arc-length parameterised rounded-rect outline — a stadium/pill whenever
+   r = height/2 (the "side" edges collapse to zero length), or a genuine
+   rounded rectangle with real vertical sides once the shape is taller than
+   that (r stays fixed at the pill's own radius rather than growing with
+   it). Gives point + outward normal at any distance t around the full
+   perimeter (`at`), or restricted to just the straight top/bottom edges
+   (`atStraight`) so stations only ever land on those two rows — never the
+   curved caps, and never the vertical sides even once those have length
+   (they're reserved for branches that grow into the loop). */
 function racetrack(x0, y0, x1, y1, r){
   const segs = [];
-  const lineSegs = [];
+  const lineSegs = [];   // top + bottom only — the station-eligible rows
   let tCursor = 0;
-  const line = (ax, ay, bx, by, nx, ny) => {
+  const line = (ax, ay, bx, by, nx, ny, isRow) => {
     const len = Math.hypot(bx-ax, by-ay);
     const seg = { t:"L", ax, ay, bx, by, nx, ny, len, tStart:tCursor };
-    segs.push(seg); lineSegs.push(seg);
+    segs.push(seg);
+    if (isRow) lineSegs.push(seg);
     tCursor += len;
   };
   const arc = (cx, cy, a0, a1) => {
@@ -290,13 +294,13 @@ function racetrack(x0, y0, x1, y1, r){
   };
   const D = Math.PI / 180;
 
-  line(x0+r, y0, x1-r, y0,  0, -1);
+  line(x0+r, y0, x1-r, y0,  0, -1, true);    // top row
   arc (x1-r, y0+r, -90*D, 0);
-  line(x1, y0+r, x1, y1-r,  1,  0);
+  line(x1, y0+r, x1, y1-r,  1,  0, false);   // right side — no stations
   arc (x1-r, y1-r, 0, 90*D);
-  line(x1-r, y1, x0+r, y1,  0,  1);
+  line(x1-r, y1, x0+r, y1,  0,  1, true);    // bottom row
   arc (x0+r, y1-r, 90*D, 180*D);
-  line(x0, y1-r, x0, y0+r, -1,  0);
+  line(x0, y1-r, x0, y0+r, -1,  0, false);   // left side — no stations
   arc (x0+r, y0+r, 180*D, 270*D);
 
   const total = tCursor;
@@ -380,6 +384,7 @@ function buildDiagram(cfg){
   /* ---- resolve nodes: trunk positions per layout, then branches ---- */
   const nodes = [];   // {code,name,ics,x,y,kind,label}
   const sp = cfg.spacing;
+  const branchGap = cfg.branchSpacing || BRANCH_SPACING_DEFAULT[cfg.layout] || 120;
 
   /* label spec helpers -------------------------------------------------- */
   const DIAG  = { nameRot:-45, nameAnchor:"start", nameDX:0, nameDY:-13, codeDir:[0,1] };
@@ -418,14 +423,39 @@ function buildDiagram(cfg){
     const n = Math.max(trunk.length, 2);
     const gapUnits = trunk.length ? trunk.map((st, i) => gapAfter(i, true)) : [1, 1];
     const totalUnits = gapUnits.reduce((a, u) => a + u, 0);
-    const H = Math.max(sp * 2, 200);
-    const W = (totalUnits * sp) / 2 + H;
+    /* r stays fixed at the pill's own radius (half the *base* height) even
+       if the shape later grows taller — that's what turns a stadium/pill
+       into a genuine rounded rect instead of just a bigger pill. Row length
+       only depends on W and r, never on H, so this can all be worked out
+       before H is finalised. */
+    const baseH = Math.max(sp * 2, 200);
+    const r = baseH / 2;
+    const W = (totalUnits * sp) / 2 + baseH;
     loopW = W;
-    loop = racetrack(0, 0, W, H, H / 2);
-    const stepUnit = loop.straightTotal / totalUnits;
+    const rowLen = W - 2 * r;             // top row length == bottom row length
+    const rowTotal = rowLen * 2;
+    const stepUnit = rowTotal / totalUnits;
     const positions = [];
     let cum = 0;
     trunk.forEach((st, i) => { positions.push(cum); cum += gapUnits[i] * stepUnit; });
+
+    /* The loop only needs to grow taller (into a rounded rect) when some
+       branch is explicitly pointed the opposite way from its junction's
+       natural outward side — i.e. it grows into the loop's interior rather
+       than away from it — so there's room for its own row without crowding
+       the loop's far edge. */
+    let needsExpand = false;
+    branches.forEach(b => {
+      if (!b.dir) return;   // no explicit direction -> always outward, unaffected
+      const idx = trunk.findIndex(st => keyOf(st) === b.from.toUpperCase());
+      if (idx < 0) return;
+      const pos = ((positions[idx] % rowTotal) + rowTotal) % rowTotal;
+      const defaultSgn = pos < rowLen ? -1 : 1;   // top row points up, bottom row points down
+      const reqSgn = b.dir === "up" ? -1 : b.dir === "down" ? 1 : defaultSgn;
+      if (reqSgn !== defaultSgn) needsExpand = true;
+    });
+    const H = needsExpand ? Math.max(baseH, 2 * branchGap) : baseH;
+    loop = racetrack(0, 0, W, H, r);
     /* No station sits on the semicircular end-caps, so nothing else would
        ever feed their outer extent into the bounding box — without this
        they get clipped out of the viewBox. */
@@ -478,7 +508,7 @@ function buildDiagram(cfg){
     }
     const jn = nodes[j];
     const bc = b.colour || colour;
-    const gap = cfg.branchSpacing || BRANCH_SPACING_DEFAULT[cfg.layout] || 120;
+    const gap = branchGap;
     const run = Math.max(sp * 1.6, 130);   // length of the smooth curve / straight run near the junction
     const shuttle = b.mode === "shuttle";
     const F = v => v.toFixed(2);
@@ -493,13 +523,15 @@ function buildDiagram(cfg){
     }
 
     if (cfg.layout === "loop"){
-      /* shoot out radially, then turn to run parallel with the loop's own
-         left-to-right station order, aligned station-for-station with the
-         trunk stations past the junction (both flanking gaps got widened
-         to 1.5x above, so there's already room for the curve on either
-         side). Default growth direction matches which way the trunk
-         itself continues. */
-      const sgn = jn.ny < 0 ? -1 : 1;
+      /* shoot out (or, if b.dir explicitly says otherwise, in toward the
+         loop's own interior — the H-expansion above already made room)
+         then turn to run parallel with the loop's own left-to-right
+         station order, aligned station-for-station with the trunk stations
+         past the junction (both flanking gaps got widened to 1.5x above,
+         so there's already room for the curve on either side). Default
+         growth direction matches which way the trunk itself continues. */
+      const defaultSgn = jn.ny < 0 ? -1 : 1;
+      const sgn = b.dir === "up" ? -1 : b.dir === "down" ? 1 : defaultSgn;
       const trunkNeighbour = j + 1 < trunkCount ? nodes[j + 1] : nodes[j - 1];
       const trunkDir = trunkNeighbour ? (trunkNeighbour.x >= jn.x ? 1 : -1) : 1;
       const turnDir = b.grow ? (b.grow === "left" ? -1 : 1) : trunkDir;
@@ -521,10 +553,19 @@ function buildDiagram(cfg){
             /* both tangents stay horizontal (matching the loop's own
                left-to-right reading direction) so the branch reads as a
                smooth lane-change off the loop rather than a rounded
-               right-angle turn */
-            const c1x = jn.x + turnDir*dist*0.5, c1y = jn.y;
-            const c2x = x1 - turnDir*dist*0.3, c2y = by;
-            return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(c2y)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
+               right-angle turn. Short straight insets at both ends —
+               leaving the junction and landing on the first branch
+               caplet — keep the bend itself clear of both caplets and,
+               importantly, clear of the first branch station's own name
+               text sitting just above it. */
+            const inset = Math.min(20, dist * 0.3);
+            const sx = jn.x + turnDir * inset;
+            const ex = x1 - turnDir * inset;
+            const distMid = Math.abs(ex - sx);
+            const c1x = sx + turnDir*distMid*0.5, c1y = jn.y;
+            const c2x = ex - turnDir*distMid*0.5, c2y = by;
+            return `M ${F(jn.x)} ${F(jn.y)} L ${F(sx)} ${F(jn.y)} ` +
+                   `C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(c2y)}, ${F(ex)} ${F(by)} L ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
           })();
       drawBranchLine(d, bc, shuttle);
 
@@ -544,8 +585,17 @@ function buildDiagram(cfg){
       const d = b.curve === "orthogonal"
         ? roundedPath([[jn.x, jn.y], [bx, jn.y], [bx, lastY]], 56)
         : (() => {
-            const c1y = jn.y + run*0.6, c2y = y1 - run*0.4;
-            return `M ${F(jn.x)} ${F(jn.y)} C ${F(jn.x)} ${F(c1y)}, ${F(bx)} ${F(c2y)}, ${F(bx)} ${F(y1)} L ${F(bx)} ${F(lastY)}`;
+            /* short straight insets at both ends — leaving the junction and
+               landing on the first branch station — so the bend doesn't
+               start right at the junction's own caplet or run right into
+               the first branch caplet either. */
+            const inset = Math.min(20, run * 0.3);
+            const sy = jn.y + inset;
+            const ey = y1 - inset;
+            const runMid = Math.max(ey - sy, 1);
+            const c1y = sy + runMid*0.6, c2y = ey - runMid*0.4;
+            return `M ${F(jn.x)} ${F(jn.y)} L ${F(jn.x)} ${F(sy)} ` +
+                   `C ${F(jn.x)} ${F(c1y)}, ${F(bx)} ${F(c2y)}, ${F(bx)} ${F(ey)} L ${F(bx)} ${F(y1)} L ${F(bx)} ${F(lastY)}`;
           })();
       drawBranchLine(d, bc, shuttle);
 
@@ -566,8 +616,17 @@ function buildDiagram(cfg){
       const d = b.curve === "orthogonal"
         ? roundedPath([[jn.x, jn.y], [jn.x, by], [lastX, by]], 56)
         : (() => {
-            const c1x = jn.x + growSgn*dist*0.5, c2x = x1 - growSgn*dist*0.3;
-            return `M ${F(jn.x)} ${F(jn.y)} C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
+            /* short straight insets at both ends — leaving the junction and
+               landing on the first branch station — so the bend doesn't
+               start right at the junction's own caplet or run right into
+               the first branch caplet either. */
+            const inset = Math.min(20, dist * 0.3);
+            const sx = jn.x + growSgn * inset;
+            const ex = x1 - growSgn * inset;
+            const distMid = Math.abs(ex - sx);
+            const c1x = sx + growSgn*distMid*0.5, c2x = ex - growSgn*distMid*0.5;
+            return `M ${F(jn.x)} ${F(jn.y)} L ${F(sx)} ${F(jn.y)} ` +
+                   `C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(x1)} ${F(by)} L ${F(lastX)} ${F(by)}`;
           })();
       drawBranchLine(d, bc, shuttle);
     }
@@ -1011,40 +1070,41 @@ CG2  Changi Airport`
   cc:{
     /* Circle Line Stage 6 (Keppel / Cantonment / Prince Edward Road) opened
        12 Jul 2026, closing the loop and renumbering the old Marina Bay spur
-       (CE1/CE2) into CC33/CC34. The loop itself now runs CC4→CC34→back to
-       CC4; Dhoby Ghaut/Bras Basah/Esplanade (CC1-CC3) are a short spur off
-       Promenade (CC4) — a real example of a loop layout with a branch. */
+       (CE1/CE2) into CC33/CC34. Trunk starts at Serangoon (CC13) and reads
+       in descending order (CC13→CC4→CC34→…→CC14→ back to CC13); Dhoby
+       Ghaut/Bras Basah/Esplanade (CC1-CC3) are a short spur off Promenade
+       (CC4) — a real example of a loop layout with a branch. */
     name:"Circle Line", code:"CCL", colour:"#fa9e0d", layout:"loop", spacing:104, closed:true,
-    spec:`CC4  Promenade          > DT15
-CC5  Nicoll Highway
-CC6  Stadium
-CC7  Mountbatten
-CC8  Dakota
-CC9  Paya Lebar         > EW8
-CC10 MacPherson         > DT26
-CC11 Tai Seng
+    spec:`CC13 Serangoon          > NE12
 CC12 Bartley
-CC13 Serangoon          > NE12
-CC14 Lorong Chuan
-CC15 Bishan             > NS17
-CC16 Marymount
-CC17 Caldecott          > TE9
-CC19 Botanic Gardens    > DT9
-CC20 Farrer Road
-CC21 Holland Village
-CC22 Buona Vista        > EW21
-CC23 one-north
-CC24 Kent Ridge
-CC25 Haw Par Villa
-CC26 Pasir Panjang
-CC27 Labrador Park
-CC28 Telok Blangah
-CC29 HarbourFront       > NE1, EW17
-CC30 Keppel
-CC31 Cantonment
-CC32 Prince Edward Road
-CC33 Marina Bay         > NS27, TE20
+CC11 Tai Seng
+CC10 MacPherson         > DT26
+CC9  Paya Lebar         > EW8
+CC8  Dakota
+CC7  Mountbatten
+CC6  Stadium
+CC5  Nicoll Highway
+CC4  Promenade          > DT15
 CC34 Bayfront           > DT16
+CC33 Marina Bay         > NS27, TE20
+CC32 Prince Edward Road
+CC31 Cantonment
+CC30 Keppel
+CC29 HarbourFront       > NE1, EW17
+CC28 Telok Blangah
+CC27 Labrador Park
+CC26 Pasir Panjang
+CC25 Haw Par Villa
+CC24 Kent Ridge
+CC23 one-north
+CC22 Buona Vista        > EW21
+CC21 Holland Village
+CC20 Farrer Road
+CC19 Botanic Gardens    > DT9
+CC17 Caldecott          > TE9
+CC16 Marymount
+CC15 Bishan             > NS17
+CC14 Lorong Chuan
 
 [branch from CC4]
 CC3  Esplanade
@@ -1474,11 +1534,12 @@ function makeBranchBlock(b, bIdx){
   head.appendChild(fromSel);
 
   const layoutVal = S.layout.value;
-  if (layoutVal !== "loop"){
+  {
     const dirSel = document.createElement("select");
     dirSel.className = "brDir";
     const opts = layoutVal === "vertical" ? [["right","branches right"],["left","branches left"]]
-                                           : [["down","branches down"],["up","branches up"]];
+      : layoutVal === "loop" ? [["","auto (outward)"],["down","branches down"],["up","branches up"]]
+      : [["down","branches down"],["up","branches up"]];
     dirSel.innerHTML = opts.map(([v,l]) => `<option value="${v}">${l}</option>`).join("");
     dirSel.value = b.dir || opts[0][0];
     dirSel.onchange = () => { b.dir = dirSel.value; syncTextFromLive(); render(); };

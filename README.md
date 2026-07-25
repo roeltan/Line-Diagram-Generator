@@ -58,9 +58,13 @@ CE1  Bayfront
 CE2  Marina Bay
 ```
 
-Direction is `up`/`down` for horizontal layouts, `left`/`right` for vertical, and
-ignored for loops (a branch always points straight out from the loop). Add
-`: #hexcolour` at the end of the header to override the branch's colour.
+Direction is `up`/`down` for horizontal layouts, `left`/`right` for vertical. For
+loops it's also `up`/`down`, but optional — leave it out and the branch points
+straight out from whichever side of the loop it sits on. Give an explicit
+direction and it always shoots that way instead, which lets a branch grow into
+the loop's own interior rather than away from it; the loop grows taller (from a
+pill into a rounded rectangle) automatically to make room. Add `: #hexcolour` at
+the end of the header to override the branch's colour.
 
 **Branch spacing**, next to station spacing in the Layout section, controls
 how far a branch's line sits from the trunk it splits off from.
