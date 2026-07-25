@@ -1106,7 +1106,10 @@ DT31 Tampines West
 DT32 Tampines           > EW2*
 DT33 Tampines East
 DT34 Upper Changi
-DT35 Expo               > CG1`
+DT35 Expo               > CG1
+# Xilin and Sungei Bedok are under construction, due 2H 2026
+DT36 Xilin
+DT37 Sungei Bedok       > TE31`
   },
   te:{
     name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal",
