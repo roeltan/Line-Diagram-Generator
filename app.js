@@ -466,17 +466,20 @@ function buildDiagram(cfg){
   /* ---- legend: every line referenced on this diagram (own line + any
      interchange codes seen), so a reader can identify what each colour means */
   const legendSeen = new Set(), legendItems = [];
-  const addLegend = (code, fallbackColour) => {
+  const pushLegend = (name, itemColour, acr) => {
+    if (legendSeen.has(name)) return;
+    legendSeen.add(name);
+    legendItems.push({ name, colour:itemColour, acr });
+  };
+  /* the current line already has its own name/code/colour on the form —
+     no need to guess it via the LINE_INFO prefix table */
+  if (cfg.name || cfg.code) pushLegend(cfg.name || cfg.code, colour, cfg.code || cfg.name);
+  if (cfg.showIc) nodes.forEach(n => n.ics.forEach(code => {
     const m = /^([A-Za-z]+)/.exec(code || "");
     const prefix = m ? m[1].toUpperCase() : (code || "").toUpperCase();
     const info = LINE_INFO[prefix];
-    const name = (info && info.name) || code || "Line";
-    if (legendSeen.has(name)) return;
-    legendSeen.add(name);
-    legendItems.push({ name, colour: (info && info.colour) || fallbackColour, acr: (info && info.acr) || prefix });
-  };
-  if (cfg.code || cfg.name) addLegend(cfg.code || cfg.name, colour);
-  if (cfg.showIc) nodes.forEach(n => n.ics.forEach(c => addLegend(c, colour)));
+    pushLegend((info && info.name) || code || "Line", (info && info.colour) || colour, (info && info.acr) || prefix);
+  }));
 
   if (legendItems.length > 1 || (legendItems.length === 1 && cfg.code)){
     /* Caplets here match the diagram's own caplet proportions (same height
