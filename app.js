@@ -28,7 +28,8 @@ const LINE_INFO = {
   CP:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
   BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" },
-  PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }
+  PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PG" },
+  RTS:{ name:"RTS Link", colour:"#6c5ce7", acr:"RTS" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
@@ -929,7 +930,7 @@ DT35 Expo               > CG1`
   },
   te:{
     name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal", spacing:100,
-    spec:`TE1  Woodlands North
+    spec:`TE1  Woodlands North     > RTS SG
 TE2  Woodlands          > NS9
 TE3  Woodlands South
 TE4  Springleaf
@@ -961,24 +962,40 @@ TE31 Bedok South
 TE32 Sungei Bedok`
   },
   stl:{
-    /* SPECULATIVE / preliminary template — the Seletar-Tengah Line is not
-       an official LTA project. Sketched per a request to fill in a rough,
-       plausible north-central alignment linking Seletar to Tengah, pending
-       more specific detail (e.g. from the Singapore Transport Collective's
-       "Transport Manifesto 50"). Treat every station here as a placeholder
-       to be replaced once real/more considered alignment info is given. */
+    /* SPECULATIVE — not an official LTA project. Transcribed from a fan
+       concept map ("Tengah-Seletar Line", a speculative map based on LTA's
+       Budget 2025, by @yuiurbanfantasy / @umiyuikaiteitan), renumbered ST
+       to match "Seletar-Tengah" naming. Replace once official/more
+       considered Transport Manifesto 50 alignment info is given. */
     name:"Seletar-Tengah Line", code:"STL", colour:"#e8467c", layout:"horizontal", spacing:100,
-    spec:`# SPECULATIVE preliminary sketch, not an official LTA line — replace freely
-ST1  Seletar Aerospace Park
-ST2  Seletar
-ST3  Fernvale            > STC
-ST4  Sengkang West
-ST5  Yishun              > NS13
-ST6  Springleaf          > TE4
-ST7  Lentor              > TE5
-ST8  Bukit Panjang       > DT1, BP6
-ST9  Hillview            > DT3
-ST10 Tengah              > JS3`
+    spec:`# SPECULATIVE fan concept map, not an official LTA line — replace freely
+ST1  Tengah              > JS3
+ST2  Brickworks
+ST3  Bukit Batok         > NS2
+ST4  Burgundy
+ST5  Maju                > CR16
+ST6  Jelita
+ST7  Buona Vista         > CC22, EW21
+ST8  Alexandra
+ST9  Bukit Merah
+ST10 Cantonment          > CC31
+ST11 Tanjong Pagar
+ST12 Marina Bay          > CC33, TE20, NS27
+ST13 Founders' Memorial  > TE22A
+ST14 Stadium             > CC6
+ST15 Kallang             > EW10
+ST16 Boon Keng-Bendemeer > NE9, DT23
+ST17 Whampoa
+ST18 Toa Payoh West
+ST19 Lorong Chuan        > CC14
+ST20 Serangoon North     > CR9
+ST21 Fernvale            > SW5
+ST22 Seletar Airport
+ST23 Yishun Valley
+ST24 Montreal
+ST25 Cochrane
+ST26 Senoko
+ST27 Woodlands North     > TE1, RTS SG`
   },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
