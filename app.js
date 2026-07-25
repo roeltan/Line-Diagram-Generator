@@ -269,11 +269,13 @@ function buildDiagram(cfg){
   const textColour = cfg.dark ? "#e8eaed" : STYLE.nameFill;
   const bgColour = cfg.dark ? "#15181c" : "#ffffff";
   const svg = el("svg", { xmlns:SVGNS, version:"1.1" });
+  const defs     = el("defs", null, svg);
   const gLines   = el("g", { fill:"none", "stroke-linecap":"round", "stroke-linejoin":"round" }, svg);
   const gLabels  = el("g", { "font-family":FONT }, svg);
   const gMarkers = el("g", null, svg);
   const bb = makeBBox();
   const F2 = v => v.toFixed(2);
+  let clipCounter = 0;
 
   /* ---- resolve nodes: trunk positions per layout, then branches ---- */
   const nodes = [];   // {code,name,ics,x,y,kind,label}
@@ -285,7 +287,6 @@ function buildDiagram(cfg){
   const LEFT  = { nameRot:0,   nameAnchor:"end",    codeDir:[-1,0], inline:true };
   const UP    = { nameRot:0,   nameAnchor:"middle", codeDir:[0,-1], inline:true };
   const DOWN  = { nameRot:0,   nameAnchor:"middle", codeDir:[0,1],  inline:true };
-  const VLIST = { nameRot:0,   nameAnchor:"start", nameDX:16, nameDY:5, codeDir:[-1,0] };
 
   let trunkPath = "";            // path 'd' for the trunk
   let loop = null;               // stadium geometry, when layout === 'loop'
@@ -313,7 +314,7 @@ function buildDiagram(cfg){
 
   } else if (cfg.layout === "vertical"){
     trunk.forEach((st, i) => {
-      nodes.push({ ...st, x:0, y:i * sp, colour, label:VLIST,
+      nodes.push({ ...st, x:0, y:i * sp, colour, label:RIGHT,
                    kind: (i === 0 || i === trunk.length-1) ? "term" : "" });
     });
     trunkPath = `M 0 0 L 0 ${((trunk.length-1)*sp).toFixed(2)}`;
@@ -366,7 +367,7 @@ function buildDiagram(cfg){
       const y1 = jn.y + run;
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:bx, y:y1 + i * sp, colour:bc,
-                     label: sgn < 0 ? LEFT : VLIST,
+                     label: sgn < 0 ? LEFT : RIGHT,
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
       });
       const lastY = y1 + (b.stations.length-1)*sp;
@@ -402,24 +403,55 @@ function buildDiagram(cfg){
     const h = STYLE.codeH;
     let codesExtent = 0;
 
-    if (codes.length){
-      /* Each code gets its own separate pill-shaped caplet (own fill, own
-         white outline) — the station's own line (codes[0]) sits centred
-         straddling the line itself; any interchange codes after it stack
-         outward, each one abutting the previous with no gap. */
-      let edge = horiz ? n.x : n.y;   // running outward edge, starts at the line
+    if (codes.length && horiz){
+      /* Vertical layout: one merged pill, colour-banded per line, with a
+         thin divider between segments — the station's own code (codes[0])
+         sits centred straddling the line; interchange codes grow off the
+         opposite side from the station name so they never collide. */
+      const widths = codes.map(cd => codeBoxW(cd.t));
+      const w0 = widths[0];
+      const growDir = -dir[0];   // grow opposite the name's side
+      const segs = [{ cd:codes[0], x0:n.x - w0/2, x1:n.x + w0/2 }];
+      let edge = growDir >= 0 ? n.x + w0/2 : n.x - w0/2;
+      for (let i = 1; i < codes.length; i++){
+        const w = widths[i];
+        let sx0, sx1;
+        if (growDir >= 0){ sx0 = edge; sx1 = edge + w; edge = sx1; }
+        else { sx1 = edge; sx0 = edge - w; edge = sx0; }
+        segs.push({ cd:codes[i], x0:sx0, x1:sx1 });
+      }
+      const x0 = Math.min(...segs.map(s => s.x0));
+      const x1 = Math.max(...segs.map(s => s.x1));
+      const total = x1 - x0, y0 = n.y - h/2;
+      clipCounter++;
+      const clipId = `cap-clip-${clipCounter}`;
+      const clip = el("clipPath", { id:clipId }, defs);
+      el("rect", { x:F2(x0), y:F2(y0), width:F2(total), height:F2(h), rx:F2(h/2) }, clip);
+      const grp = el("g", { "clip-path":`url(#${clipId})` }, gLabels);
+      [...segs].sort((a, b) => a.x0 - b.x0).forEach((s, i, arr) => {
+        el("rect", { x:F2(s.x0), y:F2(y0), width:F2(s.x1 - s.x0), height:F2(h), fill:s.cd.c }, grp);
+        if (i > 0) el("rect", { x:F2(s.x0 - .75), y:F2(y0), width:1.5, height:F2(h), fill:bgColour }, grp);
+        const tx = el("text", { x:F2((s.x0 + s.x1)/2), y:F2(n.y + 3.9), "text-anchor":"middle",
+                                "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(s.cd.c),
+                                "letter-spacing":".3" }, gLabels);
+        tx.textContent = s.cd.t;
+      });
+      el("rect", { x:F2(x0), y:F2(y0), width:F2(total), height:F2(h), rx:F2(h/2), fill:"none",
+                   stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
+      bb.rect(x0, y0, total, h);
+      codesExtent = w0 / 2;
+
+    } else if (codes.length){
+      /* Horizontal/loop layout: each code gets its own separate pill-shaped
+         caplet — the station's own line (codes[0]) sits centred straddling
+         the line; interchange codes stack outward, abutting the previous
+         one with no gap. */
+      let edge = n.y;
       codes.forEach((cd, idx) => {
         const w = codeBoxW(cd.t);
-        let cx, cy;
-        if (horiz){
-          cx = idx === 0 ? n.x : edge + dir[0] * (w / 2);
-          edge = idx === 0 ? n.x + dir[0] * (w / 2) : edge + dir[0] * w;
-          cy = n.y;
-        } else {
-          cy = idx === 0 ? n.y : edge + dir[1] * (h / 2);
-          edge = idx === 0 ? n.y + dir[1] * (h / 2) : edge + dir[1] * h;
-          cx = n.x;
-        }
+        const cy = idx === 0 ? n.y : edge + dir[1] * (h / 2);
+        edge = idx === 0 ? n.y + dir[1] * (h / 2) : edge + dir[1] * h;
+        const cx = n.x;
         el("rect", { x:F2(cx - w/2), y:F2(cy - h/2), width:F2(w), height:F2(h), rx:F2(h/2),
                      fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
@@ -428,14 +460,14 @@ function buildDiagram(cfg){
         tx.textContent = cd.t;
         bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
       });
-      codesExtent = Math.abs(edge - (horiz ? n.x : n.y));
+      codesExtent = Math.abs(edge - n.y);
     }
 
     /* station name */
     if (n.name){
       let nx, ny;
       if (L.inline){
-        const d = (codesExtent || STYLE.codeGap) + 8;
+        const d = (codesExtent || STYLE.codeGap) + 14;
         if (L.nameAnchor === "middle"){
           nx = n.x;
           ny = n.y + dir[1] * d + (dir[1] > 0 ? STYLE.nameSize * 0.85 : 0);
@@ -565,8 +597,26 @@ const S = {
   showBadge:$("showBadge"), opaque:$("opaque")
 };
 let zoom = 1, current = null;
+let diagramDark = false;   // the diagram's own light/dark background, independent of the app UI theme
 
-const SPACING_DEFAULT = { horizontal:100, vertical:56, loop:104 };
+/* Quick spacing presets shown as buttons — vertical lists read comfortably
+   tighter than horizontal/loop layouts, hence the different values. */
+const SPACING_PRESETS = { horizontal:[60,80,100], loop:[60,80,100], vertical:[40,60,80] };
+const SPACING_DEFAULT = { horizontal:100, vertical:80, loop:100 };
+
+function renderSpacingButtons(){
+  const list = SPACING_PRESETS[S.layout.value] || SPACING_PRESETS.horizontal;
+  const row = $("spacingRow");
+  row.innerHTML = "";
+  list.forEach(v => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "spacingBtn" + (String(v) === String(S.spacing.value) ? " active" : "");
+    b.textContent = v;
+    b.onclick = () => { S.spacing.value = v; renderSpacingButtons(); render(); };
+    row.appendChild(b);
+  });
+}
 
 /* Preset picker metadata — drives the little coloured line-acronym caplets
    shown under the Stations header. `key` looks up EXAMPLES. */
@@ -575,6 +625,7 @@ const PRESET_META = [
   { key:"ew",  acr:"EWL", label:"East West Line",     colour:"#009645" },
   { key:"cc",  acr:"CCL", label:"Circle Line",        colour:"#fa9e0d" },
   { key:"ne",  acr:"NEL", label:"North East Line",    colour:"#9900aa" },
+  { key:"dt",  acr:"DTL", label:"Downtown Line",      colour:"#005ec4" },
   { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa" },
   { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
   { key:"blank", acr:"—", label:"Blank template",     colour:"#8a9099" }
@@ -714,6 +765,43 @@ NE16 Sengkang           > STC
 NE17 Punggol            > PTC
 NE18 Punggol Coast`
   },
+  dt:{
+    name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal", spacing:100,
+    spec:`DT1  Bukit Panjang      > BP6
+DT2  Cashew
+DT3  Hillview
+DT4  Hume
+DT5  Beauty World
+DT6  King Albert Park
+DT7  Sixth Avenue
+DT8  Tan Kah Kee
+DT9  Botanic Gardens    > CC19
+DT10 Stevens            > TE11
+DT11 Newton             > NS21
+DT12 Little India       > NE7
+DT13 Rochor
+DT14 Bugis              > EW12
+DT15 Promenade          > CC4
+DT16 Bayfront           > CC34
+DT17 Downtown
+DT18 Telok Ayer
+DT19 Chinatown          > NE4
+DT20 Fort Canning
+DT21 Bencoolen
+DT22 Jalan Besar
+DT23 Bendemeer
+DT25 Geylang Bahru
+DT26 MacPherson         > CC10
+DT27 Ubi
+DT28 Kaki Bukit
+DT29 Bedok North
+DT30 Bedok Reservoir
+DT31 Tampines West
+DT32 Tampines           > EW2
+DT33 Tampines East
+DT34 Upper Changi
+DT35 Expo               > CG1`
+  },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
        JS is the trunk; JW (NTU spur) branches off Bahar Junction (JS7),
@@ -845,7 +933,7 @@ function readForm(){
     spacing:parseInt(S.spacing.value, 10) || 100,
     closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
     showBadge:S.showBadge.checked, opaque:S.opaque.checked,
-    dark: document.documentElement.getAttribute("data-theme") === "dark",
+    dark: diagramDark,
     trunk, branches, errors
   };
 }
@@ -861,6 +949,7 @@ function applyConfig(c){
   S.showIc.checked = c.showIc !== false;
   S.showBadge.checked = c.showBadge !== false;
   S.opaque.checked = c.opaque !== false;
+  setDiagramDark(c.dark === true);
   const errors = setLiveFromText(c.spec || "");
   syncTextFromLive();
   syncVisibility();
@@ -872,10 +961,16 @@ function applyConfig(c){
 
 function setColour(hex){ S.colour.value = hex; S.hex.value = hex; }
 
+function setDiagramDark(v){
+  diagramDark = v;
+  $("diagLightBtn").classList.toggle("active", !v);
+  $("diagDarkBtn").classList.toggle("active", v);
+}
+
 function syncVisibility(){
   const l = S.layout.value;
   $("closedField").style.display = l === "loop"  ? "" : "none";
-  $("spacingOut").textContent = S.spacing.value;
+  renderSpacingButtons();
 }
 
 /* ------------------------------------------------------------ editor rows */
@@ -1152,7 +1247,7 @@ $("dlJson").onclick = () => {
   const data = {
     name:c.name, code:c.code, colour:c.colour, layout:c.layout,
     spacing:c.spacing, closed:c.closed, showCodes:c.showCodes, showIc:c.showIc,
-    showBadge:c.showBadge, opaque:c.opaque, spec:S.spec.value
+    showBadge:c.showBadge, opaque:c.opaque, dark:c.dark, spec:S.spec.value
   };
   download(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }),
            slug() + ".json");
@@ -1179,7 +1274,7 @@ function save(){
       name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
       spacing:S.spacing.value, closed:S.closed.checked,
       showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-      showBadge:S.showBadge.checked, opaque:S.opaque.checked, spec:S.spec.value
+      showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value
     }));
   } catch (e){ /* storage disabled — no problem */ }
 }
@@ -1201,7 +1296,6 @@ S.hex.addEventListener("input", () => {
   const v = S.hex.value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(v)){ S.colour.value = v; render(); }
 });
-S.spacing.addEventListener("input", () => { $("spacingOut").textContent = S.spacing.value; render(); });
 S.layout.addEventListener("change", () => {
   S.spacing.value = SPACING_DEFAULT[S.layout.value] || 100;
   syncVisibility();
@@ -1257,6 +1351,8 @@ $("themeToggle").onclick = () => {
   applyTheme(next);
   render();
 };
+$("diagLightBtn").onclick = () => { setDiagramDark(false); render(); };
+$("diagDarkBtn").onclick = () => { setDiagramDark(true); render(); };
 let savedTheme = null;
 try { savedTheme = localStorage.getItem("theme"); } catch (e){}
 applyTheme(savedTheme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));

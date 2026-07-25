@@ -58,15 +58,23 @@
       </select>
     </div>
     <div class="field">
-      <label for="spacing">Station spacing <span id="spacingOut" style="float:right;text-transform:none;letter-spacing:0">100</span></label>
-      <div class="slider"><input type="range" id="spacing" min="40" max="200" step="2" value="100"></div>
+      <label>Station spacing</label>
+      <div class="spacingRow" id="spacingRow"></div>
+      <input type="hidden" id="spacing" value="100">
+    </div>
+    <div class="field">
+      <label>Diagram background</label>
+      <div class="spacingRow">
+        <button type="button" class="spacingBtn active" id="diagLightBtn">Light</button>
+        <button type="button" class="spacingBtn" id="diagDarkBtn">Dark</button>
+      </div>
     </div>
     <div class="checks">
       <label class="chk" id="closedField"><input type="checkbox" id="closed" checked> Closed loop (join last station back to first)</label>
       <label class="chk"><input type="checkbox" id="showCodes" checked> Show station codes</label>
       <label class="chk"><input type="checkbox" id="showIc" checked> Show interchange codes</label>
       <label class="chk"><input type="checkbox" id="showBadge" checked> Show line name badge</label>
-      <label class="chk"><input type="checkbox" id="opaque" checked> Opaque background (matches theme, for PNG export)</label>
+      <label class="chk"><input type="checkbox" id="opaque" checked> Opaque background (for PNG export)</label>
     </div>
 
     <div class="sect">Stations <span id="stationCount"></span>
