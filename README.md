@@ -28,6 +28,14 @@ If the folder is empty, the CSS `@font-face` simply fails to load and the page
 falls back to the system font stack — nothing breaks either way. `fonts/` is
 git-ignored so the font is never committed or redistributed from this repo.
 
+Exported SVG/PNG files try to embed the font's actual bytes as a data URI so it
+survives outside the app (an external `@font-face` reference means nothing once
+the SVG stands alone). This embedding step uses `fetch()`, which browsers block
+for local files when you've opened `index.html` directly via `file://` — in that
+case exports just silently fall back to the system font, same as the live page
+would without the font installed. Serve the folder over `http://` (e.g. a quick
+`python -m http.server`) if you want the font embedded in exports too.
+
 ## Station list syntax
 
 One station per line:
