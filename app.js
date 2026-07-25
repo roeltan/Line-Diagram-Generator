@@ -1203,10 +1203,11 @@ JE6  Jurong Town Hall
 JE7  Pandan Reservoir`
   },
   crl:{
-    /* Cross Island Line — under construction, Phase 1 targeted 2030. Shown
-       vertically with the Punggol Extension (CP) branching off Pasir Ris. */
+    /* Cross Island Line — under construction. Phase 1 targeted 2030,
+       Punggol Extension (CP, branching off Pasir Ris) 2032, Phase 2
+       (Turf City onward) also targeted 2032. */
     name:"Cross Island Line", code:"CRL", colour:"#97c616", layout:"horizontal", spacing:60,
-    spec:`# Under construction — Phase 1 target 2030, Punggol Extension 2032
+    spec:`# Under construction — Phase 1 target 2030, Punggol Extension & Phase 2 target 2032
 CR2  Aviation Park
 CR3  Loyang
 CR4  Pasir Ris East
@@ -1219,6 +1220,12 @@ CR10 Tavistock
 CR11 Ang Mo Kio          > NS16
 CR12 Teck Ghee
 CR13 Bright Hill         > TE
+CR14 Turf City
+CR15 King Albert Park    > DT6
+CR16 Maju
+CR17 Clementi            > EW23
+CR18 West Coast
+CR19 Jurong Lake District
 
 [branch from CR5 down shuttle CP1]
 CP2  Elias
