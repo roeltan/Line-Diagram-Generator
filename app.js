@@ -399,19 +399,19 @@ function buildDiagram(cfg){
   let loop = null;               // stadium geometry, when layout === 'loop'
   let loopW = 0;                 // loop's full width, needed later for branch placement
 
-  /* For horizontal/loop layouts, the trunk gap right next to a junction —
-     on whichever side the branch grows toward — is doubled, so the branch's
-     own curve has room to come off cleanly instead of cramming into a
-     normal-width gap. `gapUnits[i]` is 1 or 2, the size (in multiples of
-     `sp`) of the gap AFTER trunk station i (wrapping around for loops). */
+  /* For horizontal/loop layouts, both trunk gaps flanking a junction station
+     are widened to 1.5x, so the branch's own curve has room to come off
+     cleanly instead of cramming into a normal-width gap — always split
+     evenly on both sides regardless of which way the branch grows.
+     `gapUnits[i]` is 1 or 1.5, the size (in multiples of `sp`) of the gap
+     AFTER trunk station i (wrapping around for loops). */
   const keyOf = st => (st.code || st.name || "").toUpperCase();
-  const junctionGrow = new Map();   // junction key -> 'next' | 'prev', which side it grows toward
-  branches.forEach(b => junctionGrow.set(b.from.toUpperCase(), b.grow === "left" ? "prev" : "next"));
+  const junctionKeys = new Set(branches.map(b => b.from.toUpperCase()));
   const gapAfter = (i, wrap) => {
     const j = wrap ? (i + 1) % trunk.length : i + 1;
     if (j >= trunk.length || j < 0) return 1;
     const curKey = keyOf(trunk[i]), nextKey = keyOf(trunk[j]);
-    return (junctionGrow.get(curKey) === "next" || junctionGrow.get(nextKey) === "prev") ? 2 : 1;
+    return (junctionKeys.has(curKey) || junctionKeys.has(nextKey)) ? 1.5 : 1;
   };
 
   if (cfg.layout === "loop"){
@@ -495,9 +495,10 @@ function buildDiagram(cfg){
     if (cfg.layout === "loop"){
       /* shoot out radially, then turn to run parallel with the loop's own
          left-to-right station order, aligned station-for-station with the
-         trunk stations past the junction (that's the side whose gap got
-         doubled above, so there's already room for the curve). Default
-         growth direction matches which way the trunk itself continues. */
+         trunk stations past the junction (both flanking gaps got widened
+         to 1.5x above, so there's already room for the curve on either
+         side). Default growth direction matches which way the trunk
+         itself continues. */
       const sgn = jn.ny < 0 ? -1 : 1;
       const trunkNeighbour = j + 1 < trunkCount ? nodes[j + 1] : nodes[j - 1];
       const trunkDir = trunkNeighbour ? (trunkNeighbour.x >= jn.x ? 1 : -1) : 1;
@@ -507,7 +508,7 @@ function buildDiagram(cfg){
          right through where the name normally sits (fixed above the
          caplets) — so drop the name below the caplets instead */
       if (b.curve === "orthogonal" && sgn < 0) jn.label = BELOW;
-      const x1 = jn.x + turnDir * 2 * sp;
+      const x1 = jn.x + turnDir * 1.5 * sp;
       const dist = Math.abs(x1 - jn.x);
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:x1 + turnDir * i * sp, y:by, colour:bc, label:LOOPLABEL,
@@ -554,8 +555,8 @@ function buildDiagram(cfg){
       const growSgn = b.grow === "left" ? -1 : 1;
       const by = jn.y + sgn * gap;
       /* aligned station-for-station with the trunk stations past the
-         junction (the side whose gap got doubled above) */
-      const x1 = jn.x + growSgn * 2 * sp;
+         junction (both flanking gaps got widened to 1.5x above) */
+      const x1 = jn.x + growSgn * 1.5 * sp;
       const dist = Math.abs(x1 - jn.x);
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:x1 + growSgn * i * sp, y:by, colour:bc, label:DIAG,
@@ -925,7 +926,7 @@ const PRESET_GROUPS = [
 
 const EXAMPLES = {
   ns:{
-    name:"North-South Line", code:"NSL", colour:"#d42e12", layout:"horizontal", spacing:60,
+    name:"North-South Line", code:"NSL", colour:"#d42e12", layout:"horizontal",
     spec:`NS1  Jurong East        > EW24
 NS2  Bukit Batok
 NS3  Bukit Gombak
@@ -955,7 +956,7 @@ NS27 Marina Bay         > CC33, TE20
 NS28 Marina South Pier`
   },
   ew:{
-    name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal", spacing:60,
+    name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal",
     spec:`EW1  Pasir Ris
 EW2  Tampines           > DT32*
 EW3  Simei
@@ -1038,7 +1039,7 @@ CC2  Bras Basah
 CC1  Dhoby Ghaut        > NS24, NE6`
   },
   ne:{
-    name:"North East Line", code:"NEL", colour:"#9900aa", layout:"horizontal", spacing:60,
+    name:"North East Line", code:"NEL", colour:"#9900aa", layout:"horizontal",
     spec:`NE1  HarbourFront        > CC29
 NE3  Outram Park        > EW16, TE17
 NE4  Chinatown          > DT19
@@ -1058,7 +1059,7 @@ NE17 Punggol            > PTC
 NE18 Punggol Coast`
   },
   dt:{
-    name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal", spacing:60,
+    name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal",
     spec:`DT1  Bukit Panjang      > BP6*
 DT2  Cashew
 DT3  Hillview
@@ -1095,7 +1096,7 @@ DT34 Upper Changi
 DT35 Expo               > CG1`
   },
   te:{
-    name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal", spacing:60,
+    name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal",
     spec:`TE1  Woodlands North     > RTS*
 TE2  Woodlands          > NS9
 TE3  Woodlands South
@@ -1136,7 +1137,7 @@ TE31 Sungei Bedok       > DT37`
        Budget 2025, by @yuiurbanfantasy / @umiyuikaiteitan), renumbered ST
        to match "Seletar-Tengah" naming. Replace once official/more
        considered Transport Manifesto 50 alignment info is given. */
-    name:"Seletar-Tengah Line", code:"STL", colour:"#e8467c", layout:"horizontal", spacing:60,
+    name:"Seletar-Tengah Line", code:"STL", colour:"#e8467c", layout:"horizontal",
     spec:`# SPECULATIVE fan concept map, not an official LTA line — replace freely
 ST1  Tengah              > JS3
 ST2  Brickworks
@@ -1171,7 +1172,7 @@ ST27 Woodlands North     > TE1, RTS*`
        JS is the trunk; JW (NTU spur) branches off Bahar Junction (JS7),
        while JE (Tengah/Jurong East spur) branches off Tengah (JS3) —
        a real two-branch example, each off a different junction. */
-    name:"Jurong Region Line", code:"JRL", colour:"#0099aa", layout:"horizontal", spacing:60,
+    name:"Jurong Region Line", code:"JRL", colour:"#0099aa", layout:"horizontal",
     spec:`# Under construction — JS/JW mid-2028, JE 2028, JS9-12/JW3-5 2029
 JS1  Choa Chu Kang       > NS4, BP1
 JS2  Choa Chu Kang West
@@ -1206,7 +1207,7 @@ JE7  Pandan Reservoir`
     /* Cross Island Line — under construction. Phase 1 targeted 2030,
        Punggol Extension (CP, branching off Pasir Ris) 2032, Phase 2
        (Turf City onward) also targeted 2032. */
-    name:"Cross Island Line", code:"CRL", colour:"#97c616", layout:"horizontal", spacing:60,
+    name:"Cross Island Line", code:"CRL", colour:"#97c616", layout:"horizontal",
     spec:`# Under construction — Phase 1 target 2030, Punggol Extension & Phase 2 target 2032
 CR2  Aviation Park
 CR3  Loyang
@@ -1233,7 +1234,7 @@ CP3  Riviera             > PE4*
 CP4  Punggol             > NE17, PTC`
   },
   blank:{
-    name:"My Line", code:"ML", colour:"#005ec4", layout:"horizontal", spacing:60,
+    name:"My Line", code:"ML", colour:"#005ec4", layout:"horizontal",
     spec:`# CODE  Station name  > interchange codes
 ML1  First Station
 ML2  Second Station     > NS1
