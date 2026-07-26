@@ -257,6 +257,14 @@ function parseSpec(text){
       const from = m[1];
       let rest = m[2];
 
+      /* optional "to CODE" right after the from-code turns this into a
+         bridge branch (Central Line Hainault Loop style) — it splits off
+         the trunk at `from` and rejoins it at a DIFFERENT trunk station
+         (`to`) instead of dead-ending. */
+      let to = null;
+      const toM = /^to\s+([^\s,;\]]+)\s*(.*)$/i.exec(rest);
+      if (toM){ to = toM[1]; rest = toM[2]; }
+
       /* everything after the first ':' is optional colour override */
       let colour = null;
       const colonIdx = rest.indexOf(":");
@@ -296,7 +304,7 @@ function parseSpec(text){
       const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
 
       if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
-      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
+      const b = { from, to, dir, grow, mode, shuttleLabel, curve, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
       return;
@@ -662,6 +670,60 @@ function buildDiagram(cfg){
       if (label){
         jn.ics = [...jn.ics, label];
         jn.shuttleIcs = [...(jn.shuttleIcs || []), label];
+      }
+    }
+
+    /* bridge branch (Central Line Hainault Loop style): rejoins the trunk
+       at a second, different station instead of dead-ending. Only
+       meaningful on a horizontal trunk — elsewhere it falls back to a
+       normal dead-end branch (with a warning) since there's no clean way
+       to "return" to a second point on a vertical or already-closed loop
+       trunk without it looking like a completely separate feature. */
+    if (b.to){
+      const toKey = b.to.toUpperCase();
+      let j2 = nodes.findIndex((n, i) => i < trunkCount &&
+        ((n.code || "").toUpperCase() === toKey || (n.name || "").toUpperCase() === toKey));
+      if (cfg.layout !== "horizontal"){
+        warnings.push(`Branch bridge to “${b.to}” is only supported on horizontal trunks — rendered as a normal dead-end branch instead.`);
+      } else if (j2 < 0){
+        warnings.push(`Branch bridge target “${b.to}” not found — rendered as a normal dead-end branch instead.`);
+      } else if (j2 === j){
+        warnings.push(`Branch bridge target “${b.to}” is the same as its junction “${b.from}” — rendered as a normal dead-end branch instead.`);
+      } else {
+        const jn2 = nodes[j2];
+        const sgn = b.dir === "up" ? -1 : 1;
+        const by = jn.y + sgn * gap;
+        const growSgn = jn2.x >= jn.x ? 1 : -1;
+        if (sgn < 0){ jn.label = BELOW; jn2.label = BELOW; }
+        /* stations use the same fixed pitch as everywhere else in the
+           diagram rather than being squeezed to fit exactly between the
+           two junctions — a bridge branch with enough stations naturally
+           overshoots past the "to" station and curves back to meet it,
+           the same way the real Hainault Loop extends further out than
+           the direct Leytonstone-Woodford trunk distance. */
+        const x1 = jn.x + growSgn * run;
+        const n = b.stations.length;
+        b.stations.forEach((st, i) => {
+          nodes.push({ ...st, x: x1 + growSgn * i * sp, y: by, colour:bc, label:DIAG, branch:b });
+        });
+        const lastX = x1 + growSgn * (n - 1) * sp;
+        const inset = Math.min(20, run * 0.3);
+        const sx = jn.x + growSgn * inset, ex = x1 - growSgn * inset;
+        const dMid = Math.abs(ex - sx);
+        const c1x = sx + growSgn * dMid * 0.5, c2x = ex - growSgn * dMid * 0.5;
+        const backSgn = jn2.x >= lastX ? 1 : -1;
+        const dist2 = Math.abs(jn2.x - lastX);
+        const inset2 = Math.min(20, dist2 * 0.3);
+        const sx2 = lastX + backSgn * inset2, ex2 = jn2.x - backSgn * inset2;
+        const dMid2 = Math.abs(ex2 - sx2);
+        const c1x2 = sx2 + backSgn * dMid2 * 0.5, c2x2 = ex2 - backSgn * dMid2 * 0.5;
+        const d = `M ${F(jn.x)} ${F(jn.y)} L ${F(sx)} ${F(jn.y)} ` +
+                  `C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(x1)} ${F(by)} ` +
+                  `L ${F(lastX)} ${F(by)} ` +
+                  `L ${F(sx2)} ${F(by)} ` +
+                  `C ${F(c1x2)} ${F(by)}, ${F(c2x2)} ${F(jn2.y)}, ${F(ex2)} ${F(jn2.y)} L ${F(jn2.x)} ${F(jn2.y)}`;
+        drawBranchLine(d, bc, shuttle);
+        return;
       }
     }
 
@@ -2050,6 +2112,7 @@ function stLineText(st){
 }
 function branchHeaderText(b){
   let s = `[branch from ${b.from || "?"}`;
+  if (b.to) s += ` to ${b.to}`;
   if (b.dir) s += ` ${b.dir}`;
   if (b.grow && b.grow !== b.dir) s += ` ${b.grow}`;
   if (b.mode === "shuttle") s += ` shuttle${b.shuttleLabel ? " " + b.shuttleLabel : ""}`;
@@ -2200,6 +2263,14 @@ function refreshBranchFromOptions(){
     }).join("");
     if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
   });
+  document.querySelectorAll("select.brTo").forEach(sel => {
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">(dead end)</option>` + live.trunk.map(st => {
+      const v = st.code || st.name || "";
+      return `<option value="${esc(v)}">${esc((st.code || "?") + " — " + (st.name || "unnamed"))}</option>`;
+    }).join("");
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+  });
 }
 
 function makeRow(st, idx, arr){
@@ -2280,6 +2351,31 @@ function makeBranchBlock(b, bIdx){
   head.appendChild(fromSel);
 
   const layoutVal = S.layout.value;
+
+  /* bridge branch: rejoins the trunk at a second, different station
+     (Central Line Hainault Loop style) instead of dead-ending. Only
+     supported on a horizontal trunk. */
+  let toSel = null;
+  if (layoutVal === "horizontal"){
+    const toLabel = document.createElement("span");
+    toLabel.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
+    toLabel.textContent = "to";
+    head.appendChild(toLabel);
+
+    toSel = document.createElement("select");
+    toSel.className = "brTo";
+    toSel.title = "Rejoin the trunk at a different station instead of dead-ending (bridge branch)";
+    toSel.innerHTML = `<option value="">(dead end)</option>` + live.trunk.map(st => {
+      const v = st.code || st.name || "";
+      return `<option value="${esc(v)}">${esc((st.code || "?") + " — " + (st.name || "unnamed"))}</option>`;
+    }).join("");
+    toSel.value = b.to || "";
+    toSel.onchange = () => {
+      b.to = toSel.value || null;
+      syncTextFromLive(); renderEditorRows(); render();
+    };
+    head.appendChild(toSel);
+  }
   {
     const dirSel = document.createElement("select");
     dirSel.className = "brDir";
@@ -2292,7 +2388,7 @@ function makeBranchBlock(b, bIdx){
     head.appendChild(dirSel);
   }
 
-  if (layoutVal !== "vertical"){
+  if (layoutVal !== "vertical" && !b.to){
     const growSel = document.createElement("select");
     growSel.className = "brGrow";
     growSel.innerHTML = `<option value="right">grows right</option><option value="left">grows left</option>`;
@@ -2322,8 +2418,10 @@ function makeBranchBlock(b, bIdx){
   shuttleChk.className = "chk";
   const shuttleCb = document.createElement("input");
   shuttleCb.type = "checkbox"; shuttleCb.checked = b.mode === "shuttle";
+  shuttleCb.disabled = !!b.to;
   shuttleChk.appendChild(shuttleCb);
   shuttleChk.appendChild(document.createTextNode(" Shuttle"));
+  if (b.to) shuttleChk.title = "Not available for bridge branches";
   opts.appendChild(shuttleChk);
 
   const labelInp = document.createElement("input");
@@ -2336,9 +2434,10 @@ function makeBranchBlock(b, bIdx){
 
   const curveSel = document.createElement("select");
   curveSel.className = "brCurve";
+  curveSel.title = b.to ? "Bridge branches always use a smooth curve" : "";
   curveSel.innerHTML = `<option value="smooth">Smooth curve</option><option value="orthogonal">Orthogonal turn</option>`;
   curveSel.value = b.curve || "smooth";
-  curveSel.disabled = b.mode === "shuttle";
+  curveSel.disabled = b.mode === "shuttle" || !!b.to;
   curveSel.onchange = () => { b.curve = curveSel.value; syncTextFromLive(); render(); };
   opts.appendChild(curveSel);
 

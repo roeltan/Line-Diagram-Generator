@@ -81,6 +81,31 @@ the end of the header to override the branch's colour.
 **Branch spacing**, next to station spacing in the Layout section, controls
 how far a branch's line sits from the trunk it splits off from.
 
+**Bridge branches** (Central Line Hainault Loop style): add `to CODE` right
+after the `from` code to make a branch rejoin the trunk
+at a *different* station instead of dead-ending — e.g. London's Central
+Line, which splits at Leytonstone and rejoins the trunk at South Woodford
+by way of the Hainault Loop:
+
+```
+[branch from CL4 to CL2 up]
+HL1  Wanstead
+HL2  Redbridge
+HL3  Gants Hill
+HL4  Newbury Park
+HL5  Barkingside
+HL6  Fairlop
+HL7  Hainault
+```
+
+Its own stations use the same fixed pitch as everywhere else in the
+diagram, so a bridge branch with enough stations naturally overshoots past
+the "to" station and curves back to meet it — same as the real Hainault
+Loop extends further out than the direct trunk distance. Only supported on
+a horizontal trunk (shuttle mode and the orthogonal curve option aren't
+available for a bridge branch either) — elsewhere it falls back to a
+normal dead-end branch with a warning.
+
 ### Trunk end-loops
 
 A **balloon loop** is part of the trunk's own shape, not a branch — it's for
