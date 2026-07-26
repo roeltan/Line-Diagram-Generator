@@ -19,6 +19,7 @@ const LINE_INFO = {
   CC:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
   CE:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
   DT:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL" },
+  DE:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL" },
   TE:{ name:"Thomson-East Coast Line", colour:"#9d5b25", acr:"TEL" },
   JS:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
   JW:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
@@ -118,7 +119,22 @@ function setCodeText(tx, text, fontSize){
 }
 
 /* ------------------------------------------------------------------ parsing */
+/* Current/Future/Proposed roadmap tiers. A station or branch with no tag is
+   "current" (always shown); {future}/{proposed} mark it as only appearing
+   once the app's global tier toggle is at least that far out — tagging
+   individual lines in place (rather than keeping separate per-tier station
+   lists) lets a future/proposed station slot into its real position in the
+   sequence, e.g. an infill station between two already-open ones. */
+const TIER_RANK = { current:0, future:1, proposed:2 };
+const TIER_TAG_RE = /\s*\{(future|proposed)\}\s*$/i;
+function stripTier(s){
+  const m = TIER_TAG_RE.exec(s);
+  return { text: m ? s.slice(0, m.index) : s, tier: m ? m[1].toLowerCase() : "current" };
+}
+
 function parseStation(s){
+  const { text: tagStripped, tier } = stripTier(s);
+  s = tagStripped;
   let left = s, ics = [];
   const gi = s.indexOf(">");
   if (gi >= 0){
@@ -136,7 +152,7 @@ function parseStation(s){
     if (m){ code = m[1]; name = m[2].trim(); }
     else if (/^[A-Z]{1,4}\d{0,3}[A-Za-z]?$/.test(left)){ code = left; name = ""; }
   }
-  return { code, name, ics };
+  return { code, name, ics, tier };
 }
 
 function parseSpec(text){
@@ -149,7 +165,8 @@ function parseSpec(text){
     const s = raw.trim();
     if (!s || s.startsWith("#") || s.startsWith("//")) return;
     if (s.startsWith("[")){
-      const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(s);
+      const { text: sTagStripped, tier: branchTier } = stripTier(s);
+      const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(sTagStripped);
       if (!m){
         errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code>`);
         return;
@@ -196,7 +213,7 @@ function parseSpec(text){
       const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
 
       if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
-      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, stations:[], line:i+1 };
+      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, tier:branchTier, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
       return;
@@ -208,6 +225,20 @@ function parseSpec(text){
     errors.push("A branch header appeared before any trunk stations.");
 
   return { trunk, branches, errors };
+}
+
+/* Trims a parsed {trunk, branches} down to what the given roadmap tier
+   should show — drops individual future/proposed-tagged stations from the
+   trunk, and drops whole branches whose own header is tagged past the
+   active tier (along with their stations; a kept branch still has its own
+   stations filtered the same way). */
+function filterByTier(trunk, branches, tier){
+  const rank = TIER_RANK[tier] ?? TIER_RANK.current;
+  const allow = st => TIER_RANK[st.tier || "current"] <= rank;
+  return {
+    trunk: trunk.filter(allow),
+    branches: branches.filter(allow).map(b => ({ ...b, stations: b.stations.filter(allow) }))
+  };
 }
 
 /* -------------------------------------------------------------- svg helpers */
@@ -939,6 +970,10 @@ const S = {
 };
 let zoom = 1, current = null;
 let diagramDark = false;   // the diagram's own light/dark background, independent of the app UI theme
+/* Global roadmap tier (current/future/proposed) — a standing UI preference,
+   not part of any one diagram's saved config. Controls which presets show
+   up in the picker and which future/proposed-tagged stations render. */
+let globalTier = "current";
 
 /* Station spacing slider range — vertical lists read comfortably tighter
    than horizontal/loop layouts, hence the different ranges. */
@@ -1060,32 +1095,38 @@ function renderLineInfoRows(){
    (under construction, dated), and Proposed (advocacy/concept lines —
    e.g. the Singapore Transport Collective's Transport Manifesto 50 —
    added once that data is provided). */
+/* Each item's `tier` is the minimum global roadmap-tier setting at which it
+   shows up in the picker at all (independent of the future/proposed *station*
+   tags within a line's own spec, which is a separate, finer-grained thing).
+   Usually matches its group, except "Other": Blank template is a scratch
+   canvas, not a roadmap claim, so it always shows; the fan-made lines only
+   make sense alongside the rest of the speculative "Proposed" content. */
 const PRESET_GROUPS = [
   { name:"Current", items:[
-    { key:"ns", acr:"NSL", label:"North-South Line",  colour:"#d42e12" },
-    { key:"ew", acr:"EWL", label:"East-West Line",     colour:"#009645" },
-    { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d" },
-    { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa" },
-    { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4" },
-    { key:"te", acr:"TEL", label:"Thomson-East Coast Line", colour:"#9d5b25" },
+    { key:"ns", acr:"NSL", label:"North-South Line",  colour:"#d42e12", tier:"current" },
+    { key:"ew", acr:"EWL", label:"East-West Line",     colour:"#009645", tier:"current" },
+    { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d", tier:"current" },
+    { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa", tier:"current" },
+    { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4", tier:"current" },
+    { key:"te", acr:"TEL", label:"Thomson-East Coast Line", colour:"#9d5b25", tier:"current" },
   ]},
   { name:"Future", items:[
-    { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa" },
-    { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
+    { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa", tier:"future" },
+    { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616", tier:"future" },
   ]},
   { name:"Proposed", items:[
-    { key:"hll", acr:"HLL", label:"Holland-Long Island Line", colour:"#e8467c" },
-    { key:"wpr", acr:"WPR", label:"West Coast-Punggol Railway", colour:"#c7a173" },
-    { key:"sll", acr:"SLL", label:"Seletar Line", colour:"#f9cb9c" },
-    { key:"btr", acr:"BTR", label:"Bukit Timah Railway", colour:"#ed5e0c" },
-    { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680" },
-    { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000" },
-    { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#3c78d8" },
+    { key:"hll", acr:"HLL", label:"Holland-Long Island Line", colour:"#e8467c", tier:"proposed" },
+    { key:"wpr", acr:"WPR", label:"West Coast-Punggol Railway", colour:"#c7a173", tier:"proposed" },
+    { key:"sll", acr:"SLL", label:"Seletar Line", colour:"#f9cb9c", tier:"proposed" },
+    { key:"btr", acr:"BTR", label:"Bukit Timah Railway", colour:"#ed5e0c", tier:"proposed" },
+    { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680", tier:"proposed" },
+    { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000", tier:"proposed" },
+    { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#3c78d8", tier:"proposed" },
   ]},
   { name:"Other", items:[
-    { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c" },
-    { key:"ctl", acr:"CTL", label:"Central Line", colour:"#9e9700" },
-    { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099" }
+    { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c", tier:"proposed" },
+    { key:"ctl", acr:"CTL", label:"Central Line", colour:"#9e9700", tier:"proposed" },
+    { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099", tier:"current" }
   ]}
 ];
 
@@ -1095,8 +1136,10 @@ const EXAMPLES = {
     spec:`NS1  Jurong East        > EW24
 NS2  Bukit Batok
 NS3  Bukit Gombak
+NS3A Brickland          {future}
 NS4  Choa Chu Kang      > BP1
 NS5  Yew Tee
+NS6  Sungei Kadut       > DE2 {future}
 NS7  Kranji
 NS8  Marsiling
 NS9  Woodlands          > TE2
@@ -1261,8 +1304,8 @@ DT33 Tampines East
 DT34 Upper Changi
 DT35 Expo               > CG1
 # Xilin and Sungei Bedok are under construction, due 2H 2026
-DT36 Xilin
-DT37 Sungei Bedok       > TE31`
+DT36 Xilin                   {future}
+DT37 Sungei Bedok       > TE31 {future}`
   },
   te:{
     name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal",
@@ -1297,8 +1340,8 @@ TE27 Marine Terrace
 TE28 Siglap
 TE29 Bayshore
 # Bedok South and Sungei Bedok are under testing, due 2H 2026
-TE30 Bedok South
-TE31 Sungei Bedok       > DT37`
+TE30 Bedok South              {future}
+TE31 Sungei Bedok       > DT37 {future}`
   },
   stl:{
     /* SPECULATIVE — not an official LTA project. Transcribed from a fan
@@ -1535,6 +1578,7 @@ function stLineText(st){
   const code = (st.code || "").trim(), name = (st.name || "").trim();
   let s = code ? (name ? `${code} | ${name}` : code) : name;
   if (st.ics && st.ics.length) s += `  > ${st.ics.join(", ")}`;
+  if (st.tier && st.tier !== "current") s += ` {${st.tier}}`;
   return s || "?";
 }
 function branchHeaderText(b){
@@ -1544,7 +1588,9 @@ function branchHeaderText(b){
   if (b.mode === "shuttle") s += ` shuttle${b.shuttleLabel ? " " + b.shuttleLabel : ""}`;
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.colour) s += `: ${b.colour}`;
-  return s + "]";
+  s += "]";
+  if (b.tier && b.tier !== "current") s += ` {${b.tier}}`;
+  return s;
 }
 function syncTextFromLive(){
   const lines = live.trunk.map(stLineText);
@@ -1571,7 +1617,12 @@ function currentTrunkBranches(){
 }
 
 function readForm(){
-  const { trunk, branches, errors } = currentTrunkBranches();
+  const parsed = currentTrunkBranches();
+  /* Editor/Text views always show every station regardless of the global
+     roadmap tier — only the rendered diagram (and the preset picker,
+     separately) respects the toggle, so tags don't make rows unexpectedly
+     vanish while you're editing. */
+  const { trunk, branches } = filterByTier(parsed.trunk, parsed.branches, globalTier);
   return {
     name:S.name.value.trim(), code:S.code.value.trim().toUpperCase(),
     colour:S.colour.value, layout:S.layout.value,
@@ -1581,7 +1632,7 @@ function readForm(){
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked,
     dark: diagramDark,
-    trunk, branches, errors
+    trunk, branches, errors:parsed.errors
   };
 }
 
@@ -2160,26 +2211,56 @@ $("loopRotateCw").onclick = () => rotateLoop("cw");
 $("loopRotateCcw").onclick = () => rotateLoop("ccw");
 $("reverseOrderBtn").onclick = reverseTrunkOrder;
 
-PRESET_GROUPS.forEach(group => {
-  const label = document.createElement("div");
-  label.className = "presetGroupLabel";
-  label.textContent = group.name;
-  $("presetRow").appendChild(label);
+function renderPresetRow(){
+  const container = $("presetRow");
+  container.innerHTML = "";
+  const rank = TIER_RANK[globalTier] ?? TIER_RANK.current;
+  PRESET_GROUPS.forEach(group => {
+    const items = group.items.filter(p => TIER_RANK[p.tier || "current"] <= rank);
+    if (!items.length) return;
 
-  const row = document.createElement("div");
-  row.className = "presetGroupRow";
-  group.items.forEach(p => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "presetBtn"; b.title = p.label;
-    const cap = document.createElement("span");
-    cap.className = "presetCap"; cap.style.background = p.colour; cap.textContent = p.acr;
-    b.appendChild(cap);
-    b.appendChild(document.createTextNode(p.label));
-    b.onclick = () => { const ex = EXAMPLES[p.key]; if (ex) applyConfig(ex); };
-    row.appendChild(b);
+    const label = document.createElement("div");
+    label.className = "presetGroupLabel";
+    label.textContent = group.name;
+    container.appendChild(label);
+
+    const row = document.createElement("div");
+    row.className = "presetGroupRow";
+    items.forEach(p => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "presetBtn"; b.title = p.label;
+      const cap = document.createElement("span");
+      cap.className = "presetCap"; cap.style.background = p.colour; cap.textContent = p.acr;
+      b.appendChild(cap);
+      b.appendChild(document.createTextNode(p.label));
+      b.onclick = () => { const ex = EXAMPLES[p.key]; if (ex) applyConfig(ex); };
+      row.appendChild(b);
+    });
+    container.appendChild(row);
   });
-  $("presetRow").appendChild(row);
+}
+
+function syncTierButtons(){
+  document.querySelectorAll("#tierRow .spacingBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.value === globalTier);
+  });
+}
+function setTier(v){
+  globalTier = v;
+  syncTierButtons();
+  renderPresetRow();
+  try { localStorage.setItem("tier", v); } catch (e){}
+  render();
+}
+document.querySelectorAll("#tierRow .spacingBtn").forEach(b => {
+  b.onclick = () => setTier(b.dataset.value);
 });
+try {
+  const savedTier = localStorage.getItem("tier");
+  if (savedTier && TIER_RANK[savedTier] !== undefined) globalTier = savedTier;
+} catch (e){}
+syncTierButtons();
+renderPresetRow();
 
 $("zoomIn").onclick  = () => setZoom(zoom * 1.25);
 $("zoomOut").onclick = () => setZoom(zoom / 1.25);

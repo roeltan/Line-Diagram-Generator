@@ -80,3 +80,24 @@ reorder/delete stations and branches without touching text. The **⇅** button
 next to the Editor/Text toggle reverses the trunk's station order in place
 (handy for flipping which end a line reads from without retyping it). Switch
 to **Text** to paste/edit the raw syntax directly, or to copy it out.
+
+### Roadmap tiers (Current / Future / Proposed)
+
+Tag a station or branch header with `{future}` or `{proposed}` to mark it as
+part of a later construction phase, right in its natural position in the
+list (rather than keeping separate near-duplicate station lists per phase):
+
+```
+NS5  Yew Tee
+NS6  Sungei Kadut  > DE2 {future}
+NS7  Kranji
+```
+
+An untagged line is "current" and always shows. The **Roadmap** toggle at
+the top of the sidebar (Current/Future/Proposed) controls which tagged
+stations actually render on the diagram, and also which preset lines show
+up in the picker at all — Future-tier lines (e.g. Jurong Region Line) only
+appear once you're at Future or Proposed; Proposed-tier lines only at
+Proposed. The **Editor**/**Text** views always show every station
+regardless of the toggle — only the rendered diagram and the preset picker
+respect it, so tagged rows don't unexpectedly vanish while you're editing.
