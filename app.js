@@ -778,9 +778,9 @@ function buildDiagram(cfg){
      near semicircular cap — no separate connecting stem at all, matching
      how real balloon-loop maps draw it (e.g. Bukit Panjang LRT: the trunk
      runs straight into Bukit Panjang, which forks directly into two rows
-     that reconverge at a single far-cap station, Fajar). Station count N
-     splits into floor(N/2) per row, with the odd one out (if N is odd)
-     landing exactly on the far cap's own apex. */
+     that reconverge at a bare far cap). Station count N splits as evenly
+     as possible across the two rows only — never a station at the far
+     cap's own apex, which stays a plain curve. */
   (loops || []).forEach(lp => {
     const count = lp.stations.length;
     if (!count) return;
@@ -789,9 +789,10 @@ function buildDiagram(cfg){
     const bc = lp.colour || colour;
 
     const r = Math.max(56, sp * 0.9);
-    const buf = Math.max(20, r * 0.35);   // a short straight run past jn before the fork starts curving
-    const half = Math.floor(count / 2), extra = count % 2;
-    const rowLen = Math.max(half * sp, 1);
+    const buf = Math.max(20, r * 0.35);    // a short straight run past jn before the fork starts curving
+    const rowBuf = buf;                    // the same, mirrored — a short straight run after each row's own curve before its first station
+    const rowACount = Math.ceil(count / 2), rowBCount = count - rowACount;   // split evenly across the two rows only — no station at the far cap
+    const rowLen = Math.max(Math.max(rowACount, rowBCount) * sp + rowBuf, 1);
     const loopW = buf + rowLen + 2 * r;
 
     /* Which way the loop extends: auto-continue the trunk's own reading
@@ -819,7 +820,6 @@ function buildDiagram(cfg){
     const nearCenter = along(buf + r), farCenter = along(buf + r + rowLen);
     const rowANear = across(nearCenter, -r), rowAFar = across(farCenter, -r);
     const rowBNear = across(nearCenter, r), rowBFar = across(farCenter, r);
-    const farApex = along(loopW);
 
     const F = v => v.toFixed(2);
     const pt = p => `${F(p.x)} ${F(p.y)}`;
@@ -837,12 +837,12 @@ function buildDiagram(cfg){
               `L ${pt(rowBNear)} ` +
               `A ${F(r)} ${F(r)} 0 0 ${sweep} ${pt(bufPoint)} L ${pt(jn)}`;
     drawBranchLine(d, bc, false);
+    bb.add(along(loopW).x, along(loopW).y);   // the far cap's own apex — no station marks it, so the bbox needs telling directly
 
     lp.stations.forEach((st, i) => {
       let p;
-      if (i < half) p = across(along(buf + r + i * sp), -r);                  // Row A, near -> far
-      else if (extra && i === half) p = farApex;                              // the odd one out, at the far cap
-      else { const j = i - half - extra; p = across(along(buf + r + (half - 1 - j) * sp), r); }  // Row B, far -> near
+      if (i < rowACount) p = across(along(buf + r + rowBuf + i * sp), -r);             // Row A, near -> far
+      else { const j = i - rowACount; p = across(along(buf + r + rowBuf + (rowBCount - 1 - j) * sp), r); }  // Row B, far -> near
       nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:LOOPLABEL, kind:"", loop:lp });
     });
   });
