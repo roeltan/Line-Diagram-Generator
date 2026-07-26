@@ -80,6 +80,12 @@
      its normal top spacing back. */
   #lineInfoDetails > summary.sect{margin-top:20px;padding-top:14px;border-top:1px solid var(--border)}
   .sect.sectRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  /* Lighter-weight than .sect — groups related fields within one section
+     (e.g. Display's Background/Station labels/Extras) without the heavier
+     top border/spacing a whole new section gets. */
+  .subsect{font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;
+           color:var(--muted);margin:14px 0 6px}
+  .subsect:first-of-type{margin-top:2px}
   summary.sect{cursor:pointer;list-style:none;user-select:none}
   summary.sect::-webkit-details-marker{display:none}
   summary.sect::before{content:"▸ ";display:inline-block}
