@@ -828,9 +828,11 @@ function buildDiagram(cfg){
        express stops instead. */
     if (cfg.showSir && n.sir && ownCapletBox){
       const pad = STYLE.sirPad;
+      const sirW = STYLE.capletOutlineW + 0.7;
+      const sirColour = cfg.dark ? "#e8eaed" : STYLE.sirOutlineColour;
       el("path", { d:capletPath(ownCapletBox.x - pad, ownCapletBox.y - pad,
                                  ownCapletBox.w + pad*2, ownCapletBox.h + pad*2),
-                   fill:"none", stroke:STYLE.sirOutlineColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
+                   fill:"none", stroke:sirColour, "stroke-width":sirW }, gLabels);
       bb.rect(ownCapletBox.x - pad*2, ownCapletBox.y - pad*2, ownCapletBox.w + pad*4, ownCapletBox.h + pad*4);
     }
 
