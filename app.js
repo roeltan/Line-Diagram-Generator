@@ -98,13 +98,18 @@ function splitCodeSuffix(t){
   const m = /^([A-Za-z]+\d+)([A-Za-z])$/.exec(t || "");
   return m ? { base:m[1], suffix:m[2] } : { base:t || "", suffix:"" };
 }
-const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 6.6 + 11);
+/* A thin space (U+2009, ~1/5 em — narrower than a regular word space)
+   between a code's leading letters and its number, so "NS29" reads as
+   "NS 29" without the caplet needing to widen much. */
+const THIN_SPACE = " ";
+const insertThinSpace = t => t.replace(/^([A-Za-z]+)(\d)/, `$1${THIN_SPACE}$2`);
+const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 6.6 + 11 + 2);
 /* Fills a <text> element, rendering a detected suffix letter smaller. */
 function setCodeText(tx, text, fontSize){
   const { base, suffix } = splitCodeSuffix(text);
-  if (!suffix){ tx.textContent = text; return; }
+  if (!suffix){ tx.textContent = insertThinSpace(text); return; }
   const t1 = document.createElementNS(SVGNS, "tspan");
-  t1.textContent = base;
+  t1.textContent = insertThinSpace(base);
   tx.appendChild(t1);
   const t2 = document.createElementNS(SVGNS, "tspan");
   t2.setAttribute("font-size", (fontSize * 0.72).toFixed(2));
