@@ -214,16 +214,49 @@ function parseSpec(text){
   const errors = [];
   const trunk = [];
   const branches = [];
+  const loops = [];
   let cursor = trunk;
 
   text.split(/\r?\n/).forEach((raw, i) => {
     const s = raw.trim();
     if (!s || s.startsWith("#") || s.startsWith("//")) return;
     if (s.startsWith("[")){
-      const { text: sTagStripped, tier: branchTier, until: branchUntil } = stripTier(s);
+      const { text: sTagStripped, tier: hdrTier, until: hdrUntil } = stripTier(s);
+
+      /* [loop at start/end] — a balloon loop that's part of the TRUNK's own
+         shape (not a branch): it attaches to whichever end of the trunk's
+         own station list you name, curves out through its own stations,
+         and rejoins that same end. No station code needed since a trunk
+         only has two ends to begin with. Two loops at the same end (two
+         headers both saying "start", or both "end") gives a bowtie/figure-8
+         off that single point; one at each end gives a dumbbell. */
+      const loopM = /^\[\s*loop\s+at\s+(start|end)\s*(.*?)\s*\]$/i.exec(sTagStripped);
+      if (loopM){
+        const at = loopM[1].toLowerCase();
+        let rest = loopM[2];
+        let colour = null;
+        const colonIdx = rest.indexOf(":");
+        if (colonIdx >= 0){
+          let tail = rest.slice(colonIdx + 1).trim();
+          rest = rest.slice(0, colonIdx).trim();
+          const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(tail);
+          if (cm) colour = cm[1];
+        }
+        let dirUD = "", dirLR = "";
+        rest.split(/\s+/).filter(Boolean).forEach(tok => {
+          tok = tok.toLowerCase();
+          if (tok === "up" || tok === "down") dirUD = tok;
+          else if (tok === "left" || tok === "right") dirLR = tok;
+        });
+        const lp = { at, dir:dirUD, grow:dirLR, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
+        loops.push(lp);
+        cursor = lp.stations;
+        return;
+      }
+
       const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(sTagStripped);
       if (!m){
-        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code>`);
+        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code> or <code>[loop at start/end up/down left/right]</code>`);
         return;
       }
       const from = m[1];
@@ -252,9 +285,6 @@ function parseSpec(text){
         const t = tokens[ti].toLowerCase();
         if (DIRS_UD.includes(t)) dirUD = t;
         else if (DIRS_LR.includes(t)) dirLR = t;
-        else if (t === "loop"){
-          mode = "loop";
-        }
         else if (t === "shuttle"){
           mode = "shuttle";
           const next = tokens[ti + 1];
@@ -271,7 +301,7 @@ function parseSpec(text){
       const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
 
       if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
-      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, tier:branchTier, until:branchUntil, stations:[], line:i+1 };
+      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
       return;
@@ -279,18 +309,18 @@ function parseSpec(text){
     cursor.push(parseStation(s));
   });
 
-  if (!trunk.length && branches.length)
-    errors.push("A branch header appeared before any trunk stations.");
+  if (!trunk.length && (branches.length || loops.length))
+    errors.push("A branch/loop header appeared before any trunk stations.");
 
-  return { trunk, branches, errors };
+  return { trunk, branches, loops, errors };
 }
 
-/* Trims a parsed {trunk, branches} down to what the given roadmap tier
-   should show — drops individual future/proposed-tagged stations from the
-   trunk, and drops whole branches whose own header is tagged past the
-   active tier (along with their stations; a kept branch still has its own
-   stations filtered the same way). */
-function filterByTier(trunk, branches, tier){
+/* Trims a parsed {trunk, branches, loops} down to what the given roadmap
+   tier should show — drops individual future/proposed-tagged stations from
+   the trunk, and drops whole branches/loops whose own header is tagged past
+   the active tier (along with their stations; a kept branch/loop still has
+   its own stations filtered the same way). */
+function filterByTier(trunk, branches, loops, tier){
   const rank = TIER_RANK[tier] ?? TIER_RANK.current;
   const allow = st => {
     if (TIER_RANK[st.tier || "current"] > rank) return false;
@@ -299,7 +329,8 @@ function filterByTier(trunk, branches, tier){
   };
   return {
     trunk: trunk.filter(allow),
-    branches: branches.filter(allow).map(b => ({ ...b, stations: b.stations.filter(allow) }))
+    branches: branches.filter(allow).map(b => ({ ...b, stations: b.stations.filter(allow) })),
+    loops: (loops || []).filter(allow).map(lp => ({ ...lp, stations: lp.stations.filter(allow) }))
   };
 }
 
@@ -471,7 +502,7 @@ function racetrack(x0, y0, x1, y1, r){
    Returns { svg, width, height }. All paint attributes are inline so the
    serialised SVG stands alone for download / PNG conversion. */
 function buildDiagram(cfg){
-  const { trunk, branches } = cfg;
+  const { trunk, branches, loops } = cfg;
   const colour = cfg.colour;
   const textColour = cfg.dark ? "#e8eaed" : STYLE.nameFill;
   const bgColour = cfg.dark ? "#15181c" : "#ffffff";
@@ -629,68 +660,6 @@ function buildDiagram(cfg){
       }
     }
 
-    /* "balloon" branch — a spur that curves out from the junction, loops
-       all the way around through its own stations, and rejoins the same
-       junction instead of dead-ending (e.g. the Bukit Panjang LRT loop off
-       Bukit Panjang, or one of Sengkang LRT's East/West loops off Sengkang).
-       Reuses the same racetrack geometry the whole-diagram loop layout
-       uses, just sized to this branch's own station count. Stations sit
-       on whichever long edge of the racetrack ends up farther from the
-       trunk; the near edge (plus both short ends) is bare return track,
-       and the stem connecting the junction to the racetrack is drawn once —
-       it's the same physical track walked in both directions, so drawing
-       it once already reads correctly. */
-    if (b.mode === "loop"){
-      const count = b.stations.length;
-      const r = Math.min(32, Math.max(20, sp * 0.4));
-      const rowLen = Math.max((count - 1) * sp, 1);
-      const loopW = rowLen + 2 * r, loopH = 2 * r;   // loopH === 2r on purpose: a stadium/pill with no straight sides
-      const sgn = b.dir === "up" ? -1 : 1;          // which side of the trunk it bulges to
-      const growSgn = b.grow === "left" ? -1 : 1;   // which way it extends from the junction
-      const x0 = growSgn > 0 ? jn.x : jn.x - loopW;
-      const x1 = x0 + loopW;
-      const y0 = sgn < 0 ? jn.y - gap - loopH : jn.y + gap;
-      const y1 = y0 + loopH;
-      const rt = racetrack(x0, y0, x1, y1, r);
-      const onTopRow = sgn < 0;   // far-from-trunk row: top (y0) if bulging up, bottom (y1) if bulging down
-
-      /* Exact perimeter (`t`) values for the racetrack's 4 corners, per the
-         segment order racetrack() builds internally (top row, corner, right
-         side, corner, bottom row [right-to-left], corner, left side,
-         corner). Computed directly rather than via atStraight()/at()'s own
-         boundary handling, which is ambiguous exactly at a row's endpoints. */
-      const cornerLen = r * Math.PI / 2;
-      const tTopRight = rowLen, tBottomRight = rowLen + 2 * cornerLen, tBottomLeft = 2 * rowLen + 2 * cornerLen;
-
-      let entryT, startT, stepSign;
-      if (onTopRow){
-        // stations run along the top row (t=0 at its left end, t=rowLen at its right)
-        if (growSgn > 0){ entryT = tBottomLeft; startT = 0; stepSign = 1; }
-        else            { entryT = tBottomRight; startT = tTopRight; stepSign = -1; }
-      } else {
-        // stations run along the bottom row (t=tBottomRight at its right end, t=tBottomLeft at its left)
-        if (growSgn > 0){ entryT = 0; startT = tBottomLeft; stepSign = -1; }
-        else            { entryT = tTopRight; startT = tBottomRight; stepSign = 1; }
-      }
-      b.stations.forEach((st, i) => {
-        const p = rt.at(startT + stepSign * i * sp);
-        nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:LOOPLABEL,
-                     kind:"", branch:b });
-      });
-      const entry = rt.at(entryT);
-      const stem = roundedPath([[jn.x, jn.y], [entry.x, jn.y], [entry.x, entry.y]], 40);
-      /* path() can't wrap past `total` on its own — walk from entryT to the
-         end, then (if entryT wasn't already 0) continue from the very start
-         back up to entryT, so the loop closes on itself starting and
-         ending at the same entry point regardless of which corner it is. */
-      const stripM = d => d.replace(/^M\s*-?[\d.]+\s+-?[\d.]+\s*/, "");
-      const loopBody = entryT <= 0.01
-        ? rt.path(0, rt.total)
-        : rt.path(entryT, rt.total) + " " + stripM(rt.path(0, entryT));
-      drawBranchLine(stem + stripM(loopBody), bc, shuttle);
-      return;
-    }
-
     if (cfg.layout === "loop"){
       /* shoot out (or, if b.dir explicitly says otherwise, in toward the
          loop's own interior — the H-expansion above already made room)
@@ -799,6 +768,71 @@ function buildDiagram(cfg){
           })();
       drawBranchLine(d, bc, shuttle);
     }
+  });
+
+  /* ---- trunk end-loops: a balloon loop that's part of the TRUNK's own
+     shape (Bukit Panjang LRT's loop off Bukit Panjang, or Sengkang LRT's
+     East/West loops off the shared Sengkang station) — not a branch, it
+     attaches to whichever end of the trunk's own station list it names and
+     rejoins that same end. Reuses the same racetrack geometry the
+     whole-diagram loop layout uses, sized to its own station count.
+     Stations sit on whichever long edge of the racetrack ends up farther
+     from the trunk; the near edge (plus both short ends) is bare return
+     track, and the stem is drawn once — it's the same physical track
+     walked in both directions, so drawing it once already reads right. */
+  (loops || []).forEach(lp => {
+    if (!lp.stations.length) return;
+    const jn = lp.at === "start" ? nodes[0] : nodes[trunkCount - 1];
+    if (!jn) return;
+    const bc = lp.colour || colour;
+    const gap = branchGap;
+
+    const count = lp.stations.length;
+    const r = Math.min(32, Math.max(20, sp * 0.4));
+    const rowLen = Math.max((count - 1) * sp, 1);
+    const loopW = rowLen + 2 * r, loopH = 2 * r;   // loopH === 2r on purpose: a stadium/pill with no straight sides
+    const sgn = lp.dir === "up" ? -1 : 1;          // which side of the trunk it bulges to
+    const growSgn = lp.grow === "left" ? -1 : 1;   // which way it extends from the anchor
+    const x0 = growSgn > 0 ? jn.x : jn.x - loopW;
+    const x1 = x0 + loopW;
+    const y0 = sgn < 0 ? jn.y - gap - loopH : jn.y + gap;
+    const y1 = y0 + loopH;
+    const rt = racetrack(x0, y0, x1, y1, r);
+    const onTopRow = sgn < 0;   // far-from-trunk row: top (y0) if bulging up, bottom (y1) if bulging down
+
+    /* Exact perimeter (`t`) values for the racetrack's 4 corners — see
+       racetrack()'s own segment order (top row, corner, right side,
+       corner, bottom row [right-to-left], corner, left side, corner).
+       Computed directly rather than via at()'s own boundary handling,
+       which is ambiguous exactly at a row's endpoints. */
+    const cornerLen = r * Math.PI / 2;
+    const tTopRight = rowLen, tBottomRight = rowLen + 2 * cornerLen, tBottomLeft = 2 * rowLen + 2 * cornerLen;
+
+    let entryT, startT, stepSign;
+    if (onTopRow){
+      // stations run along the top row (t=0 at its left end, t=rowLen at its right)
+      if (growSgn > 0){ entryT = tBottomLeft; startT = 0; stepSign = 1; }
+      else            { entryT = tBottomRight; startT = tTopRight; stepSign = -1; }
+    } else {
+      // stations run along the bottom row (t=tBottomRight at its right end, t=tBottomLeft at its left)
+      if (growSgn > 0){ entryT = 0; startT = tBottomLeft; stepSign = -1; }
+      else            { entryT = tTopRight; startT = tBottomRight; stepSign = 1; }
+    }
+    lp.stations.forEach((st, i) => {
+      const p = rt.at(startT + stepSign * i * sp);
+      nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:LOOPLABEL, kind:"", loop:lp });
+    });
+    const entry = rt.at(entryT);
+    const stem = roundedPath([[jn.x, jn.y], [entry.x, jn.y], [entry.x, entry.y]], 40);
+    /* path() can't wrap past `total` on its own — walk from entryT to the
+       end, then (if entryT wasn't already 0) continue from the very start
+       back up to entryT, so the loop closes on itself starting and ending
+       at the same entry point regardless of which corner it is. */
+    const stripM = d => d.replace(/^M\s*-?[\d.]+\s+-?[\d.]+\s*/, "");
+    const loopBody = entryT <= 0.01
+      ? rt.path(0, rt.total)
+      : rt.path(entryT, rt.total) + " " + stripM(rt.path(0, entryT));
+    drawBranchLine(stem + stripM(loopBody), bc, false);
   });
 
   /* ---- labels + markers: the station-code caplet doubles as the marker ---- */
@@ -1573,7 +1607,7 @@ BP4  Teck Whye
 BP5  Phoenix
 BP6  Bukit Panjang       > DT1, BT9
 
-[branch from BP6 down right loop]
+[loop at end down right]
 BP7  Petir
 BP8  Pending
 BP9  Bangkit
@@ -1588,14 +1622,14 @@ BP13 Senja`
     name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal",
     spec:`STC  Sengkang            > NE16
 
-[branch from STC up right loop]
+[loop at end up right]
 SE1  Compassvale
 SE2  Rumbia
 SE3  Bakau
 SE4  Kangkar
 SE5  Ranggung
 
-[branch from STC down right loop]
+[loop at end down right]
 SW1  Cheng Lim
 SW2  Farmway
 SW3  Kupang
@@ -1931,7 +1965,7 @@ MB2  Branch Terminus`
    lose focus. Text mode just uses S.spec.value directly, like before;
    switching Editor -> Text serialises `live`, Text -> Editor re-parses it. */
 let mode = "editor";                 // 'editor' | 'text'
-let live = { trunk:[], branches:[] };
+let live = { trunk:[], branches:[], loops:[] };
 let dragCtx = null;
 
 function esc(s){
@@ -1957,11 +1991,19 @@ function branchHeaderText(b){
   if (b.dir) s += ` ${b.dir}`;
   if (b.grow && b.grow !== b.dir) s += ` ${b.grow}`;
   if (b.mode === "shuttle") s += ` shuttle${b.shuttleLabel ? " " + b.shuttleLabel : ""}`;
-  if (b.mode === "loop") s += " loop";
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.colour) s += `: ${b.colour}`;
   s += "]";
   s += tagSuffix(b.tier, false, b.until);
+  return s;
+}
+function loopHeaderText(lp){
+  let s = `[loop at ${lp.at || "end"}`;
+  if (lp.dir) s += ` ${lp.dir}`;
+  if (lp.grow && lp.grow !== lp.dir) s += ` ${lp.grow}`;
+  if (lp.colour) s += `: ${lp.colour}`;
+  s += "]";
+  s += tagSuffix(lp.tier, false, lp.until);
   return s;
 }
 function syncTextFromLive(){
@@ -1971,21 +2013,27 @@ function syncTextFromLive(){
     lines.push(branchHeaderText(b));
     b.stations.forEach(st => lines.push(stLineText(st)));
   });
+  (live.loops || []).forEach(lp => {
+    lines.push("");
+    lines.push(loopHeaderText(lp));
+    lp.stations.forEach(st => lines.push(stLineText(st)));
+  });
   S.spec.value = lines.join("\n");
 }
 function setLiveFromText(text){
   const parsed = parseSpec(text);
   live.trunk = parsed.trunk;
   live.branches = parsed.branches;
+  live.loops = parsed.loops;
   return parsed.errors;
 }
 
 function currentTrunkBranches(){
   if (mode === "text"){
     const parsed = parseSpec(S.spec.value);
-    return { trunk:parsed.trunk, branches:parsed.branches, errors:parsed.errors };
+    return { trunk:parsed.trunk, branches:parsed.branches, loops:parsed.loops, errors:parsed.errors };
   }
-  return { trunk:live.trunk, branches:live.branches, errors:[] };
+  return { trunk:live.trunk, branches:live.branches, loops:live.loops || [], errors:[] };
 }
 
 function readForm(){
@@ -1994,7 +2042,7 @@ function readForm(){
      roadmap tier — only the rendered diagram (and the preset picker,
      separately) respects the toggle, so tags don't make rows unexpectedly
      vanish while you're editing. */
-  const { trunk, branches } = filterByTier(parsed.trunk, parsed.branches, globalTier);
+  const { trunk, branches, loops } = filterByTier(parsed.trunk, parsed.branches, parsed.loops, globalTier);
   return {
     name:S.name.value.trim(), code:S.code.value.trim().toUpperCase(),
     colour:S.colour.value, layout:S.layout.value,
@@ -2006,7 +2054,7 @@ function readForm(){
     opaque:S.opaque.checked,
     dark: diagramDark,
     tierRank: TIER_RANK[globalTier] ?? TIER_RANK.current,
-    trunk, branches, errors:parsed.errors
+    trunk, branches, loops, errors:parsed.errors
   };
 }
 

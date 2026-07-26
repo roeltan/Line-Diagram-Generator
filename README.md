@@ -81,23 +81,30 @@ the end of the header to override the branch's colour.
 **Branch spacing**, next to station spacing in the Layout section, controls
 how far a branch's line sits from the trunk it splits off from.
 
-Add `loop` to a branch header for a **balloon loop** — a spur that curves out
-from the junction, runs through its own stations, and rejoins that *same*
-junction instead of dead-ending, for lines that reverse via a loop rather
-than a plain terminus (Bukit Panjang LRT's loop off Bukit Panjang, or one of
-Sengkang LRT's East/West loops off Sengkang — see those two presets for
-worked examples). Works on both horizontal and vertical layouts:
+### Trunk end-loops
+
+A **balloon loop** is part of the trunk's own shape, not a branch — it's for
+a line that reverses via a loop rather than a plain terminus (Bukit Panjang
+LRT's loop off Bukit Panjang, or one of Sengkang LRT's East/West loops off
+the shared Sengkang station — see those two presets for worked examples).
+Start a `[loop at start]` or `[loop at end]` section after the trunk's own
+stations, naming whichever end of the trunk's *own station list* it attaches
+to and rejoins — no station code needed, since a trunk only has two ends:
 
 ```
-[branch from BP6 down right loop]
+BP5  Phoenix
+BP6  Bukit Panjang
+
+[loop at end down right]
 BP7  Petir
 BP8  Pending
 ```
 
-`up`/`down` still picks which side of the trunk it bulges toward, and
-`left`/`right` which way it extends from the junction. Two loop branches off
-the *same* junction (no separate tail) gives a bowtie/figure-8 shape, like
-Sengkang LRT.
+`up`/`down` picks which side of the trunk it bulges toward, and `left`/`right`
+which way it extends from the anchor end. Works on both horizontal and
+vertical layouts. Two `[loop at end]` sections (or two `[loop at start]`)
+gives a bowtie/figure-8 off that single end, like Sengkang LRT; one
+`[loop at start]` and one `[loop at end]` gives a dumbbell shape instead.
 
 The **Editor** view (default) gives you a row-based UI for all of this — add/
 reorder/delete stations and branches without touching text. The **⇅** button
