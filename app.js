@@ -265,6 +265,15 @@ function parseSpec(text){
       const toM = /^to\s+([^\s,;\]]+)\s*(.*)$/i.exec(rest);
       if (toM){ to = toM[1]; rest = toM[2]; }
 
+      /* the "to" end's own grow/curve tokens carry their own ':' (growTo:left,
+         curveTo:orthogonal) — pull them out before the colour-override split
+         below, which otherwise treats the first ':' anywhere in the string
+         as "everything after this is the colour". */
+      let growTo = "", curveTo = "";
+      rest = rest.replace(/\bgrowTo:(left|right)\b/i, (_, v) => { growTo = v.toLowerCase(); return ""; })
+                 .replace(/\bcurveTo:(smooth|orthogonal)\b/i, (_, v) => { curveTo = v.toLowerCase(); return ""; })
+                 .replace(/\s+/g, " ").trim();
+
       /* everything after the first ':' is optional colour override */
       let colour = null;
       const colonIdx = rest.indexOf(":");
@@ -304,7 +313,7 @@ function parseSpec(text){
       const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
 
       if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
-      const b = { from, to, dir, grow, mode, shuttleLabel, curve, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
+      const b = { from, to, dir, grow, growTo, mode, shuttleLabel, curve, curveTo, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
       return;
@@ -699,35 +708,75 @@ function buildDiagram(cfg){
         const jn2 = nodes[j2];
         const sgn = b.dir === "up" ? -1 : 1;
         const by = jn.y + sgn * gap;
-        const growSgn = jn2.x >= jn.x ? 1 : -1;
+        const naturalSgn = jn2.x >= jn.x ? 1 : -1;   // the direction the row actually has to travel to reach jn2
         if (sgn < 0){ jn.label = BELOW; jn2.label = BELOW; }
-        /* stations use the same fixed pitch as everywhere else in the
-           diagram rather than being squeezed to fit exactly between the
-           two junctions — a bridge branch with enough stations naturally
-           overshoots past the "to" station and curves back to meet it,
-           the same way the real Hainault Loop extends further out than
-           the direct Leytonstone-Woodford trunk distance. */
-        const x1 = jn.x + growSgn * run;
+
+        /* Each end's own grow direction is independent — "left"/"right"
+           picks which way that junction's own curve first presents itself,
+           same as a normal branch. Left unset, it defaults to whichever way
+           actually reaches the other junction (no hook). When it's set to
+           the OTHER way instead, the curve can't just end there — it hooks
+           out that way first, up and over, then doubles back to become the
+           row heading the right direction, rather than silently overriding
+           the choice. Both ends use the same fixed curve "size" (`run`)
+           regardless of which case applies, or of how far apart the two
+           junctions are — the straight middle section (where the stations
+           sit) stretches or shrinks to take up whatever's left, instead of
+           the curves themselves growing long and thin. */
+        const growFromSgn = b.grow === "left" ? -1 : b.grow === "right" ? 1 : naturalSgn;
+        const growToSgn = b.growTo === "left" ? -1 : b.growTo === "right" ? 1 : naturalSgn;
+        const curveFrom = b.curve || "smooth";
+        const curveTo = b.curveTo || "smooth";
+        const hookGap = Math.max(sp * 0.5, 32);
+        const by2 = by + sgn * hookGap;
+
+        let fromX, dFrom;
+        if (growFromSgn === naturalSgn){
+          fromX = jn.x + naturalSgn * run;
+          if (curveFrom === "orthogonal"){
+            dFrom = roundedPath([[jn.x, jn.y], [jn.x, by], [fromX, by]], 56);
+          } else {
+            const inset = Math.min(20, run * 0.3);
+            const sx = jn.x + naturalSgn * inset, ex = fromX - naturalSgn * inset;
+            const dMid = Math.abs(ex - sx);
+            const c1x = sx + naturalSgn * dMid * 0.5, c2x = ex - naturalSgn * dMid * 0.5;
+            dFrom = `M ${F(jn.x)} ${F(jn.y)} L ${F(sx)} ${F(jn.y)} ` +
+                    `C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(fromX)} ${F(by)}`;
+          }
+        } else {
+          fromX = jn.x + growFromSgn * run;
+          const hookR = curveFrom === "orthogonal" ? 26 : 64;
+          dFrom = roundedPath([[jn.x, jn.y], [jn.x, by2], [fromX, by2], [fromX, by]], hookR);
+          bb.add(jn.x, by2); bb.add(fromX, by2);
+        }
+
+        let toX, dTo;
+        if (growToSgn === naturalSgn){
+          toX = jn2.x - naturalSgn * run;
+          if (curveTo === "orthogonal"){
+            dTo = roundedPath([[toX, by], [jn2.x, by], [jn2.x, jn2.y]], 56);
+          } else {
+            const inset = Math.min(20, run * 0.3);
+            const sx2 = toX + naturalSgn * inset, ex2 = jn2.x - naturalSgn * inset;
+            const dMid2 = Math.abs(ex2 - sx2);
+            const c1x2 = sx2 + naturalSgn * dMid2 * 0.5, c2x2 = ex2 - naturalSgn * dMid2 * 0.5;
+            dTo = `M ${F(toX)} ${F(by)} L ${F(sx2)} ${F(by)} ` +
+                  `C ${F(c1x2)} ${F(by)}, ${F(c2x2)} ${F(jn2.y)}, ${F(ex2)} ${F(jn2.y)} L ${F(jn2.x)} ${F(jn2.y)}`;
+          }
+        } else {
+          toX = jn2.x + naturalSgn * run;
+          const hookR2 = curveTo === "orthogonal" ? 26 : 64;
+          dTo = roundedPath([[toX, by], [toX, by2], [jn2.x, by2], [jn2.x, jn2.y]], hookR2);
+          bb.add(jn2.x, by2); bb.add(toX, by2);
+        }
+
         const n = b.stations.length;
         b.stations.forEach((st, i) => {
-          nodes.push({ ...st, x: x1 + growSgn * i * sp, y: by, colour:bc, label:DIAG, branch:b });
+          nodes.push({ ...st, x: fromX + naturalSgn * i * sp, y: by, colour:bc, label:DIAG, branch:b });
         });
-        const lastX = x1 + growSgn * (n - 1) * sp;
-        const inset = Math.min(20, run * 0.3);
-        const sx = jn.x + growSgn * inset, ex = x1 - growSgn * inset;
-        const dMid = Math.abs(ex - sx);
-        const c1x = sx + growSgn * dMid * 0.5, c2x = ex - growSgn * dMid * 0.5;
-        const backSgn = jn2.x >= lastX ? 1 : -1;
-        const dist2 = Math.abs(jn2.x - lastX);
-        const inset2 = Math.min(20, dist2 * 0.3);
-        const sx2 = lastX + backSgn * inset2, ex2 = jn2.x - backSgn * inset2;
-        const dMid2 = Math.abs(ex2 - sx2);
-        const c1x2 = sx2 + backSgn * dMid2 * 0.5, c2x2 = ex2 - backSgn * dMid2 * 0.5;
-        const d = `M ${F(jn.x)} ${F(jn.y)} L ${F(sx)} ${F(jn.y)} ` +
-                  `C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(x1)} ${F(by)} ` +
-                  `L ${F(lastX)} ${F(by)} ` +
-                  `L ${F(sx2)} ${F(by)} ` +
-                  `C ${F(c1x2)} ${F(by)}, ${F(c2x2)} ${F(jn2.y)}, ${F(ex2)} ${F(jn2.y)} L ${F(jn2.x)} ${F(jn2.y)}`;
+        const lastX = fromX + naturalSgn * (n - 1) * sp;
+
+        const d = dFrom + ` L ${F(lastX)} ${F(by)} ` + dTo.replace(/^M/, "L");
         drawBranchLine(d, bc, shuttle);
         return;
       }
@@ -2123,6 +2172,10 @@ function branchHeaderText(b){
   if (b.grow && b.grow !== b.dir) s += ` ${b.grow}`;
   if (b.mode === "shuttle") s += ` shuttle${b.shuttleLabel ? " " + b.shuttleLabel : ""}`;
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
+  if (b.to){
+    if (b.growTo) s += ` growTo:${b.growTo}`;
+    if (b.curveTo === "orthogonal") s += " curveTo:orthogonal";
+  }
   if (b.colour) s += `: ${b.colour}`;
   s += "]";
   s += tagSuffix(b.tier, false, b.until);
@@ -2365,6 +2418,32 @@ function makeBranchBlock(b, bIdx){
 
   const layoutVal = S.layout.value;
 
+  /* a normal branch only has one end, so its grow selector is unlabeled and
+     just sits after "from" — a bridge branch has two independent ends, so
+     each gets its own labeled grow selector plus an "auto" option (whichever
+     way actually reaches the other junction, no U-turn hook). */
+  const makeGrowSel = (label, value, onChange, isBridgeEnd) => {
+    if (layoutVal === "vertical") return null;
+    if (isBridgeEnd){
+      const lbl = document.createElement("span");
+      lbl.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
+      lbl.textContent = label;
+      head.appendChild(lbl);
+    }
+    const sel = document.createElement("select");
+    sel.className = "brGrow";
+    sel.title = isBridgeEnd ? "Which way this end's own curve first presents itself — auto follows whichever way actually reaches the other junction, no U-turn" : "";
+    sel.innerHTML = (isBridgeEnd ? `<option value="">auto</option>` : "") +
+      `<option value="right">grows right</option><option value="left">grows left</option>`;
+    sel.value = isBridgeEnd ? (value || "") : (value === "left" ? "left" : "right");
+    sel.onchange = () => { onChange(sel.value || null); syncTextFromLive(); render(); };
+    head.appendChild(sel);
+    return sel;
+  };
+
+  if (!b.to) makeGrowSel("", b.grow, v => { b.grow = v; }, false);
+  else makeGrowSel("start grows", b.grow, v => { b.grow = v; }, true);
+
   /* bridge branch: rejoins the trunk at a second, different station
      (Central Line Hainault Loop style) instead of dead-ending. Only
      supported on a horizontal trunk. */
@@ -2389,6 +2468,9 @@ function makeBranchBlock(b, bIdx){
     };
     head.appendChild(toSel);
   }
+
+  if (b.to) makeGrowSel("end grows", b.growTo, v => { b.growTo = v; }, true);
+
   {
     const dirSel = document.createElement("select");
     dirSel.className = "brDir";
@@ -2399,15 +2481,6 @@ function makeBranchBlock(b, bIdx){
     dirSel.value = b.dir || opts[0][0];
     dirSel.onchange = () => { b.dir = dirSel.value; syncTextFromLive(); render(); };
     head.appendChild(dirSel);
-  }
-
-  if (layoutVal !== "vertical" && !b.to){
-    const growSel = document.createElement("select");
-    growSel.className = "brGrow";
-    growSel.innerHTML = `<option value="right">grows right</option><option value="left">grows left</option>`;
-    growSel.value = b.grow === "left" ? "left" : "right";
-    growSel.onchange = () => { b.grow = growSel.value; syncTextFromLive(); render(); };
-    head.appendChild(growSel);
   }
 
   const colourInp = document.createElement("input");
@@ -2453,12 +2526,23 @@ function makeBranchBlock(b, bIdx){
 
   const curveSel = document.createElement("select");
   curveSel.className = "brCurve";
-  curveSel.title = b.to ? "Bridge branches always use a smooth curve" : "";
-  curveSel.innerHTML = `<option value="smooth">Smooth curve</option><option value="orthogonal">Orthogonal turn</option>`;
+  curveSel.title = b.to ? "Curve style for the start (\"from\") end" : "";
+  curveSel.innerHTML = `<option value="smooth">${b.to ? "Smooth curve (start)" : "Smooth curve"}</option><option value="orthogonal">${b.to ? "Orthogonal turn (start)" : "Orthogonal turn"}</option>`;
   curveSel.value = b.curve || "smooth";
-  curveSel.disabled = b.mode === "shuttle" || !!b.to;
+  curveSel.disabled = b.mode === "shuttle";
   curveSel.onchange = () => { b.curve = curveSel.value; syncTextFromLive(); render(); };
   opts.appendChild(curveSel);
+
+  let curveToSel = null;
+  if (b.to){
+    curveToSel = document.createElement("select");
+    curveToSel.className = "brCurveTo";
+    curveToSel.title = "Curve style for the end (\"to\") end";
+    curveToSel.innerHTML = `<option value="smooth">Smooth curve (end)</option><option value="orthogonal">Orthogonal turn (end)</option>`;
+    curveToSel.value = b.curveTo || "smooth";
+    curveToSel.onchange = () => { b.curveTo = curveToSel.value; syncTextFromLive(); render(); };
+    opts.appendChild(curveToSel);
+  }
 
   shuttleCb.onchange = () => {
     b.mode = shuttleCb.checked ? "shuttle" : "split";

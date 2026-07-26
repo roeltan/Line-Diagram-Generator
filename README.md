@@ -102,9 +102,31 @@ Its own stations use the same fixed pitch as everywhere else in the
 diagram, so a bridge branch with enough stations naturally overshoots past
 the "to" station and curves back to meet it — same as the real Hainault
 Loop extends further out than the direct trunk distance. Only supported on
-a horizontal trunk (shuttle mode and the orthogonal curve option aren't
-available for a bridge branch either) — elsewhere it falls back to a
-normal dead-end branch with a warning.
+a horizontal trunk (shuttle mode isn't available for a bridge branch
+either) — elsewhere it falls back to a normal dead-end branch with a
+warning.
+
+Each end has its own independent grow direction and curve style, same as a
+normal branch — `left`/`right` right after the `from` code sets the start
+end's grow, `growTo:left`/`growTo:right` sets the end end's; a bare
+`orthogonal` sets the start end's curve, `curveTo:orthogonal` the end
+end's. Left unset, an end's grow defaults to "auto" — whichever way
+actually reaches the other junction directly. Set it to the *other* way
+instead and that end hooks out that way first, up and over, before
+doubling back to become the row — like a small U-turn off the trunk:
+
+```
+[branch from CL4 to CL2 up growTo:left]
+```
+
+Both ends always use the same fixed curve size regardless of station
+count or how far apart the two junctions are — the straight middle
+section (where the stations sit) stretches or shrinks to take up whatever
+room is left, rather than the curves themselves growing long and thin.
+When the two junctions are close together relative to that fixed curve
+size, both ends' curves can end up overlapping/crossing rather than
+sitting side by side — space them further apart (or add more branch
+spacing) if that happens.
 
 ### Loop shape
 
