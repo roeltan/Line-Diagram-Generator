@@ -107,3 +107,21 @@ appear once you're at Future or Proposed; Proposed-tier lines only at
 Proposed. The **Editor**/**Text** views always show every station
 regardless of the toggle — only the rendered diagram and the preset picker
 respect it, so tagged rows don't unexpectedly vanish while you're editing.
+
+Add `until:future` or `until:proposed` to a station or branch header for the
+rarer opposite case — something that exists now (or from a given tier on)
+but gets converted or removed later in the roadmap, e.g. a branch that gets
+absorbed into a different line by the time the proposed tier is reached:
+
+```
+[branch from EW4 down shuttle CG] {until:future}
+```
+
+This branch renders at Current and Future, then disappears at Proposed.
+Combine tags with a comma, e.g. `{proposed,sir}` or `{future,until:proposed}`.
+
+A station's interchange codes (after `>`) are filtered by the *other* line's
+own tier too, independent of the host station's tag — e.g. a real, open-today
+station can list a Cross Island Line cross-reference that only appears once
+the Roadmap toggle reaches Future, since CRL doesn't exist yet at Current.
+This is driven by each line prefix's own `tier` in the `LINE_INFO` table.

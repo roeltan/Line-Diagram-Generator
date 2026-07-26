@@ -13,35 +13,35 @@ const SVGNS = "http://www.w3.org/2000/svg";
    Edit/extend freely; unknown prefixes fall back to the current line. */
 const LINE_INFO = {
   NS:{ name:"North-South Line", colour:"#d42e12", acr:"NSL" },
-  NW:{ name:"North-South Line", colour:"#d42e12", acr:"NSL" },
+  NW:{ name:"North-South Line", colour:"#d42e12", acr:"NSL", tier:"proposed" },
   EW:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
   CG:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
-  ES:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
+  ES:{ name:"East-West Line", colour:"#009645", acr:"EWL", tier:"proposed" },
   NE:{ name:"North East Line", colour:"#9900aa", acr:"NEL" },
-  NP:{ name:"North East Line", colour:"#9900aa", acr:"NEL" },
+  NP:{ name:"North East Line", colour:"#9900aa", acr:"NEL", tier:"proposed" },
   CC:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
   CE:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
-  CJ:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
+  CJ:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL", tier:"proposed" },
   DT:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL" },
-  DE:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL" },
+  DE:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL", tier:"future" },
   TE:{ name:"Thomson-East Coast Line", colour:"#9d5b25", acr:"TEL" },
-  JS:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
-  JW:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
-  JE:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
-  JR:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL" },
-  CR:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
-  CP:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
+  JS:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL", tier:"future" },
+  JW:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL", tier:"future" },
+  JE:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL", tier:"future" },
+  JR:{ name:"Jurong Region Line", colour:"#0099aa", acr:"JRL", tier:"future" },
+  CR:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL", tier:"future" },
+  CP:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL", tier:"future" },
   BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
-  RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS" },
-  HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL" },
-  WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR" },
-  SL:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL" }, SP:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL" },
-  BT:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR" }, BE:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR" },
-  ER:{ name:"Eastern Region Line", colour:"#cc2680", acr:"ERL" },
-  NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL" },
-  NC:{ name:"North Coast Line", colour:"#3c78d8", acr:"NCL" }
+  RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS", tier:"future" },
+  HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL", tier:"proposed" },
+  WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR", tier:"proposed" },
+  SL:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL", tier:"proposed" }, SP:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL", tier:"proposed" },
+  BT:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" }, BE:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" },
+  ER:{ name:"Eastern Region Line", colour:"#cc2680", acr:"ERL", tier:"proposed" },
+  NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL", tier:"proposed" },
+  NC:{ name:"North Coast Line", colour:"#3c78d8", acr:"NCL", tier:"proposed" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
@@ -50,6 +50,16 @@ function colourForCode(code, fallback){
   const m = /^([A-Z]+)/.exec((code||"").toUpperCase());
   const info = m && LINE_INFO[m[1]];
   return (info && info.colour) || fallback;
+}
+
+/* An interchange code's own roadmap tier — e.g. a JRL or CRL cross-reference
+   shouldn't show up on an otherwise-current station until the line it
+   belongs to has reached that far, even though the host station itself is
+   untagged (real today). Independent of the host station's own tier. */
+function tierOfCode(code){
+  const m = /^([A-Z]+)/.exec((code||"").toUpperCase());
+  const info = m && LINE_INFO[m[1]];
+  return (info && info.tier) || "current";
 }
 
 /* Picks white or dark text for legibility against a given caplet/badge
@@ -157,21 +167,28 @@ const BUS_ICON_GLYPH = "m 9.18888,6.78872 c 0,0.25435 -0.26635,0.66851 -3.08151,
    lists) lets a future/proposed station slot into its real position in the
    sequence, e.g. an infill station between two already-open ones. */
 const TIER_RANK = { current:0, future:1, proposed:2 };
-/* {future}/{proposed} set the roadmap tier; an additional `sir` token (e.g.
-   {proposed,sir} or {proposed sir}) marks a station as a SIR express-service
-   stop — independent of tier, since express stops exist on current, future,
-   and proposed lines alike. */
-const TAG_RE = /\s*\{([a-z, ]+)\}\s*$/i;
+/* {future}/{proposed} set the roadmap tier (the tier this row first appears
+   at); an additional `sir` token (e.g. {proposed,sir} or {proposed sir})
+   marks a station as a SIR express-service stop, independent of tier since
+   express stops exist on current, future, and proposed lines alike. A
+   `until:<tier>` token marks the LAST tier this row still appears at — for
+   something that gets converted/removed later in the roadmap (e.g. the
+   Changi Airport Branch Line converting to the TEL by the time the STC's
+   own proposed-tier plans are reached) rather than the usual case of
+   something only ever being added, never taken away. */
+const TAG_RE = /\s*\{([a-z0-9,: ]+)\}\s*$/i;
 function stripTier(s){
   const m = TAG_RE.exec(s);
-  if (!m) return { text: s, tier: "current", sir: false };
+  if (!m) return { text: s, tier: "current", sir: false, until: null };
   const tokens = m[1].toLowerCase().split(/[\s,]+/).filter(Boolean);
   const tier = tokens.find(t => t === "future" || t === "proposed") || "current";
-  return { text: s.slice(0, m.index), tier, sir: tokens.includes("sir") };
+  const untilTok = tokens.find(t => t.startsWith("until:"));
+  const until = untilTok ? untilTok.slice(6) : null;
+  return { text: s.slice(0, m.index), tier, sir: tokens.includes("sir"), until };
 }
 
 function parseStation(s){
-  const { text: tagStripped, tier, sir } = stripTier(s);
+  const { text: tagStripped, tier, sir, until } = stripTier(s);
   s = tagStripped;
   let left = s, ics = [];
   const gi = s.indexOf(">");
@@ -190,7 +207,7 @@ function parseStation(s){
     if (m){ code = m[1]; name = m[2].trim(); }
     else if (/^[A-Z]{1,4}\d{0,3}[A-Za-z]?$/.test(left)){ code = left; name = ""; }
   }
-  return { code, name, ics, tier, sir };
+  return { code, name, ics, tier, sir, until };
 }
 
 function parseSpec(text){
@@ -203,7 +220,7 @@ function parseSpec(text){
     const s = raw.trim();
     if (!s || s.startsWith("#") || s.startsWith("//")) return;
     if (s.startsWith("[")){
-      const { text: sTagStripped, tier: branchTier } = stripTier(s);
+      const { text: sTagStripped, tier: branchTier, until: branchUntil } = stripTier(s);
       const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(sTagStripped);
       if (!m){
         errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code>`);
@@ -251,7 +268,7 @@ function parseSpec(text){
       const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
 
       if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
-      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, tier:branchTier, stations:[], line:i+1 };
+      const b = { from, dir, grow, mode, shuttleLabel, curve, colour, tier:branchTier, until:branchUntil, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
       return;
@@ -272,7 +289,11 @@ function parseSpec(text){
    stations filtered the same way). */
 function filterByTier(trunk, branches, tier){
   const rank = TIER_RANK[tier] ?? TIER_RANK.current;
-  const allow = st => TIER_RANK[st.tier || "current"] <= rank;
+  const allow = st => {
+    if (TIER_RANK[st.tier || "current"] > rank) return false;
+    if (st.until && rank > TIER_RANK[st.until]) return false;
+    return true;
+  };
   return {
     trunk: trunk.filter(allow),
     branches: branches.filter(allow).map(b => ({ ...b, stations: b.stations.filter(allow) }))
@@ -725,6 +746,7 @@ function buildDiagram(cfg){
       if (/^bus$/i.test(c)) return;           // a nearby bus interchange, drawn separately as an icon
       const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
       const t = osi ? c.slice(0, -1) : c;
+      if (TIER_RANK[tierOfCode(t)] > cfg.tierRank) return;   // that other line doesn't exist yet at this roadmap tier
       codes.push({ t, c:colourForCode(t, n.colour), osi });
     });
 
@@ -938,6 +960,7 @@ function buildDiagram(cfg){
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(code => {
     if (/^bus$/i.test(code)) return;                           // a nearby bus interchange, not a rail line
     if (n.shuttleIcs && n.shuttleIcs.includes(code)) return;   // shuttle spur of this same line, not a separate interchange
+    if (TIER_RANK[tierOfCode(code)] > cfg.tierRank) return;    // that other line doesn't exist yet at this roadmap tier
     const m = /^([A-Za-z]+)/.exec(code || "");
     const prefix = m ? m[1].toUpperCase() : (code || "").toUpperCase();
     const info = LINE_INFO[prefix];
@@ -1262,7 +1285,7 @@ NS27 Marina Bay         > CC33, TE20
 NS28 Marina South Pier`
   },
   ew:{
-    name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal",
+    name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal", branchSpacing:170,
     spec:`# STC proposal — unmarked extension beyond EW33, not an official LTA project
 EW34 Tuas Frontier       > CR26 {proposed}
 EW33 Tuas Link
@@ -1299,7 +1322,7 @@ EW3  Simei
 EW2  Tampines           > DT32*, BUS
 EW1  Pasir Ris             > CR5, BUS
 
-[branch from EW4 down shuttle CG]
+[branch from EW4 down shuttle CG] {until:future}
 CG1  Expo               > DT35
 CG2  Changi Airport
 # CAL2TEL — officially announced Jul 2025: the Changi Airport Branch Line
@@ -1309,7 +1332,7 @@ CG3  Changi Airport Terminal 5 > CR1 {future}
 
 # STC proposal — LTA has provisioned space for this extension but has
 # no confirmed plans to construct it (as of 2024)
-[branch from EW30 down] {proposed}
+[branch from EW30 down left shuttle ES2] {proposed}
 ES3  Tuas Basin                    {proposed}
 ES4  Tuas Shipyard                 {proposed}
 ES5  Tuas South                    {proposed}
@@ -1803,17 +1826,18 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
-function tagSuffix(tier, sir){
+function tagSuffix(tier, sir, until){
   const parts = [];
   if (tier && tier !== "current") parts.push(tier);
   if (sir) parts.push("sir");
+  if (until) parts.push(`until:${until}`);
   return parts.length ? ` {${parts.join(",")}}` : "";
 }
 function stLineText(st){
   const code = (st.code || "").trim(), name = (st.name || "").trim();
   let s = code ? (name ? `${code} | ${name}` : code) : name;
   if (st.ics && st.ics.length) s += `  > ${st.ics.join(", ")}`;
-  s += tagSuffix(st.tier, st.sir);
+  s += tagSuffix(st.tier, st.sir, st.until);
   return s || "?";
 }
 function branchHeaderText(b){
@@ -1824,7 +1848,7 @@ function branchHeaderText(b){
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.colour) s += `: ${b.colour}`;
   s += "]";
-  s += tagSuffix(b.tier, false);
+  s += tagSuffix(b.tier, false, b.until);
   return s;
 }
 function syncTextFromLive(){
@@ -1868,6 +1892,7 @@ function readForm(){
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked,
     dark: diagramDark,
+    tierRank: TIER_RANK[globalTier] ?? TIER_RANK.current,
     trunk, branches, errors:parsed.errors
   };
 }
