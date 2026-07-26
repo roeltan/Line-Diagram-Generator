@@ -76,10 +76,11 @@
   summary.sect::-webkit-details-marker{display:none}
   summary.sect::before{content:"▸ ";display:inline-block}
   details[open] summary.sect::before{content:"▾ "}
-  .liRow{display:flex;align-items:center;gap:5px;background:var(--field);border:1px solid var(--border);
-         border-radius:7px;padding:5px 6px}
+  .liRow{display:flex;align-items:center;gap:9px;background:var(--field);border:1px solid var(--border);
+         border-radius:7px;padding:8px 10px}
+  #lineInfoRows.rowList{gap:8px}
   .liRow input{min-width:0;border:1px solid transparent;background:transparent;color:var(--ink);
-               padding:5px 6px;border-radius:5px;font-size:12.5px}
+               padding:6px 7px;border-radius:5px;font-size:12.5px}
   .liRow input:hover{border-color:var(--border)}
   .liRow input:focus{border-color:var(--accent);background:var(--panel);box-shadow:none}
   .liPrefix{width:52px;flex:none;font-weight:650;text-transform:uppercase}
