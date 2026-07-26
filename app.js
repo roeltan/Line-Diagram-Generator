@@ -2230,7 +2230,8 @@ function renderPresetRow(){
       const b = document.createElement("button");
       b.type = "button"; b.className = "presetBtn"; b.title = p.label;
       const cap = document.createElement("span");
-      cap.className = "presetCap"; cap.style.background = p.colour; cap.textContent = p.acr;
+      cap.className = "presetCap"; cap.style.background = p.colour;
+      cap.style.color = contrastText(p.colour); cap.textContent = p.acr;
       b.appendChild(cap);
       b.appendChild(document.createTextNode(p.label));
       b.onclick = () => { const ex = EXAMPLES[p.key]; if (ex) applyConfig(ex); };
