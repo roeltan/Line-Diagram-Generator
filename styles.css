@@ -71,6 +71,10 @@
   .sect{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
         margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--border)}
   .sect:first-child, #presetRow + .sect{margin-top:0;padding-top:0;border-top:0}
+  /* .sect:first-child above also (unintentionally) zeroes the "Interchange
+     colours" summary, since it's the first child of its own <details> — put
+     its normal top spacing back. */
+  #lineInfoDetails > summary.sect{margin-top:20px;padding-top:14px;border-top:1px solid var(--border)}
   .sect.sectRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
   summary.sect{cursor:pointer;list-style:none;user-select:none}
   summary.sect::-webkit-details-marker{display:none}
