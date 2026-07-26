@@ -29,7 +29,14 @@ const LINE_INFO = {
   BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
-  RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS" }
+  RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS" },
+  HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL" },
+  WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR" },
+  SL:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL" }, SP:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL" },
+  BT:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR" }, BE:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR" },
+  ER:{ name:"Eastern Region Line", colour:"#cc2680", acr:"ERL" },
+  NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL" },
+  NC:{ name:"North Coast Line", colour:"#3c78d8", acr:"NCL" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
@@ -1062,9 +1069,17 @@ const PRESET_GROUPS = [
     { key:"crl", acr:"CRL", label:"Cross Island Line",  colour:"#97c616" },
   ]},
   { name:"Proposed", items:[
-    { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c" },
+    { key:"hll", acr:"HLL", label:"Holland-Long Island Line", colour:"#e8467c" },
+    { key:"wpr", acr:"WPR", label:"West Coast-Punggol Railway", colour:"#c7a173" },
+    { key:"sll", acr:"SLL", label:"Seletar Line", colour:"#f9cb9c" },
+    { key:"btr", acr:"BTR", label:"Bukit Timah Railway", colour:"#ed5e0c" },
+    { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680" },
+    { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000" },
+    { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#3c78d8" },
   ]},
   { name:"Other", items:[
+    { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c" },
+    { key:"ctl", acr:"CTL", label:"Central Line", colour:"#9e9700" },
     { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099" }
   ]}
 ];
@@ -1315,6 +1330,106 @@ ST24 Montreal
 ST25 Cochrane
 ST26 Senoko
 ST27 Woodlands North     > TE1, RTS*`
+  },
+  ctl:{
+    /* SPECULATIVE — a fan/advocacy concept, not an official LTA project.
+       Provided directly as a full station list (loop, with a Sentosa spur
+       off HarbourFront) — replace freely once anything more official
+       comes along. */
+    name:"Central Line", code:"CTL", colour:"#9e9700", layout:"loop", spacing:110, branchSpacing:105, closed:true,
+    spec:`CT44 | Labrador Park  > CC27
+CT43 | Telok Blangah West
+CT42 | Alexandra
+CT41 | Mei Chin East
+CT40 | Queenstown  > EW19
+CT39 | Mei Chin West
+CT38 | Science Park
+CT37 | Ayer Rajah
+CT36 | Commonwealth  > EW20
+CT35 | Holland Road
+CT34 | Farrer Road  > CC20
+CT33 | Botanic Gardens  > CC19*, DT9
+CT32 | Adam
+CT31 | Lornie
+CT30 | MacRitchie
+CT29 | Caldecott Hills
+CT28 | Caldecott  > CC17, TE9
+CT27 | Toa Payoh West
+CT26 | Braddell  > NS18
+CT25 | Toa Payoh North
+CT24 | Kim Keat
+CT23 | St Andrew's
+CT22 | Woodleigh  > NE11
+CT21 | Bidadari
+CT20 | Joo Seng
+CT19 | Mattar  > DT25
+CT18 | MacPherson  > DT26
+CT17 | Ubi  > DT27
+CT16 | Kampong Ubi
+CT15 | Eunos  > EW7
+CT14 | Telok Kurau
+CT13 | Marine Parade  > TE26
+CT12 | Haig
+CT11 | Tanjong Katong North
+CT10 | Dakota  > CC8
+CT9 | Mountbatten  > CC7
+CT8 | Stadium Walk
+CT7 | Tanjong Rhu  > TE23
+CT6 | Promenade  > DT15, CC4
+CT5 | Singapore Flyer
+CT4 | Bayfront  > DT16, CC34
+CT3 | Marina Bay  > NS27, TE20, CC33
+CT2 | Tanjong Pagar Port
+CT1 | Southern Central
+CT48 | HarbourFront  > NE1, CC29
+CT47 | Keppel Bay
+CT46 | Berlayar
+
+[branch from CT48 down right]
+CT49 | Sentosa Gateway
+CT50 | Beach Central`
+  },
+  hll:{
+    name:"Holland-Long Island Line", code:"HLL", colour:"#e8467c", layout:"horizontal",
+    spec:`HL1  First Station
+HL2  Second Station
+HL3  Third Station`
+  },
+  wpr:{
+    name:"West Coast-Punggol Railway", code:"WPR", colour:"#c7a173", layout:"horizontal",
+    spec:`WP1  First Station
+WP2  Second Station
+WP3  Third Station`
+  },
+  sll:{
+    name:"Seletar Line", code:"SLL", colour:"#f9cb9c", layout:"horizontal",
+    spec:`SL1  First Station
+SL2  Second Station
+SL3  Third Station`
+  },
+  btr:{
+    name:"Bukit Timah Railway", code:"BTR", colour:"#ed5e0c", layout:"horizontal",
+    spec:`BT1  First Station
+BT2  Second Station
+BT3  Third Station`
+  },
+  erl:{
+    name:"Eastern Region Line", code:"ERL", colour:"#cc2680", layout:"horizontal",
+    spec:`ER1  First Station
+ER2  Second Station
+ER3  Third Station`
+  },
+  nrl:{
+    name:"Northern Rail Link", code:"NRL", colour:"#900000", layout:"horizontal",
+    spec:`NR1  First Station
+NR2  Second Station
+NR3  Third Station`
+  },
+  ncl:{
+    name:"North Coast Line", code:"NCL", colour:"#3c78d8", layout:"horizontal",
+    spec:`NC1  First Station
+NC2  Second Station
+NC3  Third Station`
   },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
