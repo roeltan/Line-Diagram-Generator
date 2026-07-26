@@ -48,6 +48,10 @@
   input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
   textarea{font:12.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto}
   .field{margin-bottom:14px}
+  .fieldRow{display:flex;justify-content:space-between;align-items:baseline}
+  .fieldVal{font-weight:700;color:var(--ink);text-transform:none;letter-spacing:0;font-size:12.5px}
+  input.slider{width:100%;accent-color:var(--accent);height:20px;padding:0;margin:0;
+               background:transparent;border:0}
   .row{display:flex;gap:10px}
   .row>*{flex:1;min-width:0}
   button{font:inherit;font-weight:550;padding:7px 12px;border-radius:7px;border:1px solid var(--border);

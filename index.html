@@ -81,14 +81,12 @@
       <input type="hidden" id="layout" value="horizontal">
     </div>
     <div class="field">
-      <label>Station spacing</label>
-      <div class="spacingRow" id="spacingRow"></div>
-      <input type="hidden" id="spacing" value="100">
+      <label class="fieldRow">Station spacing <span id="spacingVal" class="fieldVal"></span></label>
+      <input type="range" class="slider" id="spacing" step="5">
     </div>
     <div class="field">
-      <label>Branch spacing</label>
-      <div class="spacingRow" id="branchSpacingRow"></div>
-      <input type="hidden" id="branchSpacing" value="120">
+      <label class="fieldRow">Branch spacing <span id="branchSpacingVal" class="fieldVal"></span></label>
+      <input type="range" class="slider" id="branchSpacing" step="5">
     </div>
     <div class="field">
       <label>Diagram background</label>
@@ -109,6 +107,8 @@
       <label class="chk"><input type="checkbox" id="showCodes" checked> Show station codes</label>
       <label class="chk"><input type="checkbox" id="showIc" checked> Show interchange codes</label>
       <label class="chk"><input type="checkbox" id="showBadge" checked> Show line name badge</label>
+      <label class="chk"><input type="checkbox" id="showLegend" checked> Show legend</label>
+      <label class="chk"><input type="checkbox" id="showAccent" checked> Show accent strip</label>
       <label class="chk"><input type="checkbox" id="opaque" checked> Opaque background (for PNG export)</label>
     </div>
 

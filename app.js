@@ -807,6 +807,7 @@ function buildDiagram(cfg){
 
   /* ---- legend: every line referenced on this diagram (own line + any
      interchange codes seen), so a reader can identify what each colour means */
+  let legendGroup = null;
   const legendSeen = new Set(), legendItems = [];
   const pushLegend = (name, itemColour, acr) => {
     if (legendSeen.has(name)) return;
@@ -824,14 +825,14 @@ function buildDiagram(cfg){
     pushLegend((info && info.name) || code || "Line", (info && info.colour) || colour, (info && info.acr) || prefix);
   }));
 
-  if (legendItems.length > 1 || (legendItems.length === 1 && cfg.code)){
+  if (cfg.showLegend && (legendItems.length > 1 || (legendItems.length === 1 && cfg.code))){
     /* Caplets here match the diagram's own caplet proportions (same height
        and text size), just scaled to the legend's own label text size. */
     const legendTextSize = 11.5;
     const legendScale = legendTextSize / STYLE.nameSize;
     const lh = STYLE.codeH * legendScale;
     const capFont = STYLE.codeSize * legendScale;
-    const g = el("g", { "font-family":FONT }, svg);
+    const g = legendGroup = el("g", { "font-family":FONT }, svg);
     let lx = bb.x0, ly = bb.y1 + 36;
     const rowMaxX = bb.x0 + Math.max(bb.x1 - bb.x0, 480);
     legendItems.forEach(it => {
@@ -851,8 +852,9 @@ function buildDiagram(cfg){
   }
 
   /* ---- header badge ---- */
+  let badgeGroup = null;
   if (cfg.showBadge && (cfg.name || cfg.code)){
-    const g = el("g", { "font-family":FONT }, svg);
+    const g = badgeGroup = el("g", { "font-family":FONT }, svg);
     const bx = bb.x0, by = bb.y0 - 58;
     let x = bx;
     if (cfg.code){
@@ -873,16 +875,52 @@ function buildDiagram(cfg){
     }
   }
 
+  if (cfg.layout === "horizontal" && nodes.length){
+    /* The rightmost station's diagonal name (and, on lines with a lot of
+       interchanges, the legend row) can overhang further past the actual
+       line than anything does on the left, since nothing reads leftward —
+       a plain tight-fit bounding box then leaves more empty space on the
+       right than the left. Checked here, after the legend/badge, so it
+       accounts for whichever of those ends up widest. Extending bb.x0
+       alone would leave the badge/legend behind with a gap where they
+       used to be flush against the edge, so when the left side is the one
+       that needs to grow, shift them along with it by the same amount —
+       they stay exactly as flush as they've always been, while the line
+       itself ends up the one that's centred. */
+    const xs = nodes.map(n => n.x);
+    const leftGap = Math.min(...xs) - bb.x0, rightGap = bb.x1 - Math.max(...xs);
+    if (rightGap > leftGap){
+      const d = rightGap - leftGap;
+      bb.x0 -= d;
+      const shift = `translate(${F2(-d)} 0)`;
+      if (legendGroup) legendGroup.setAttribute("transform", shift);
+      if (badgeGroup) badgeGroup.setAttribute("transform", shift);
+    } else if (leftGap > rightGap){
+      bb.x1 += (leftGap - rightGap);
+    }
+  }
+
+  /* ---- decorative accent strip: a purely cosmetic band of the line's own
+     colour, toggleable and off by default so it never surprises an existing
+     diagram. Sits right past where the bottom edge would normally be —
+     the usual bottom padding stays exactly as it is, the strip just adds
+     on beyond it, extending the frame a little further down. */
+  const ACCENT_H = 10;
+
   /* ---- frame ---- */
   const pad = 26;
+  const bottomExtra = pad + (cfg.showAccent ? ACCENT_H : 0);
   const x0 = bb.x0 - pad, y0 = bb.y0 - pad;
-  const w  = (bb.x1 - bb.x0) + pad*2, h = (bb.y1 - bb.y0) + pad*2;
+  const w  = (bb.x1 - bb.x0) + pad*2, h = (bb.y1 - bb.y0) + pad + bottomExtra;
   svg.setAttribute("viewBox", `${x0.toFixed(2)} ${y0.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
   svg.setAttribute("width", Math.ceil(w));
   svg.setAttribute("height", Math.ceil(h));
   if (cfg.opaque){
     const bg = el("rect", { x:x0, y:y0, width:w, height:h, fill: cfg.dark ? "#15181c" : "#ffffff" });
     svg.insertBefore(bg, svg.firstChild);
+  }
+  if (cfg.showAccent){
+    el("rect", { x:x0, y:y0 + h - ACCENT_H, width:w, height:ACCENT_H, fill:colour }, svg);
   }
   return { svg, width:w, height:h, warnings };
 }
@@ -893,41 +931,39 @@ const S = {
   spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
   hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"), branchSpacing:$("branchSpacing"),
   closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"),
-  showBadge:$("showBadge"), opaque:$("opaque")
+  showBadge:$("showBadge"), showLegend:$("showLegend"), showAccent:$("showAccent"), opaque:$("opaque")
 };
 let zoom = 1, current = null;
 let diagramDark = false;   // the diagram's own light/dark background, independent of the app UI theme
 
-/* Quick spacing presets shown as buttons — vertical lists read comfortably
-   tighter than horizontal/loop layouts, hence the different values. */
-const SPACING_PRESETS = { horizontal:[60,80,100], loop:[60,80,100], vertical:[40,60,80] };
+/* Station spacing slider range — vertical lists read comfortably tighter
+   than horizontal/loop layouts, hence the different ranges. */
+const SPACING_RANGE = { horizontal:{min:40,max:160}, loop:{min:40,max:160}, vertical:{min:25,max:100} };
 const SPACING_DEFAULT = { horizontal:60, vertical:40, loop:100 };
 
 /* Branch spacing: how far a branch's line sits from the trunk it splits
    off from. Same idea as station spacing, just perpendicular to the
    trunk rather than along it — vertical layouts need more room since the
    branch runs alongside station-name text. */
-const BRANCH_SPACING_PRESETS = { horizontal:[90,120,150], loop:[90,120,150], vertical:[180,240,300] };
+const BRANCH_SPACING_RANGE = { horizontal:{min:60,max:220}, loop:{min:60,max:220}, vertical:{min:120,max:360} };
 const BRANCH_SPACING_DEFAULT = { horizontal:120, vertical:240, loop:120 };
 
-function renderPresetButtons(row, list, field, onPick){
-  row.innerHTML = "";
-  list.forEach(v => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "spacingBtn" + (String(v) === String(field.value) ? " active" : "");
-    b.textContent = v;
-    b.onclick = () => { field.value = v; onPick(); render(); };
-    row.appendChild(b);
-  });
+/* Sliders only ever snap to multiples of 5 (native `step`, as long as
+   min/max are themselves multiples of 5) — this just keeps the field's
+   min/max in sync with the current layout and clamps/re-labels the value
+   when a layout switch moves it outside the new range. */
+function syncSlider(field, valEl, range){
+  field.min = range.min; field.max = range.max;
+  let v = +field.value || range.min;
+  v = Math.min(range.max, Math.max(range.min, v));
+  field.value = v;
+  valEl.textContent = v;
 }
-function renderSpacingButtons(){
-  renderPresetButtons($("spacingRow"), SPACING_PRESETS[S.layout.value] || SPACING_PRESETS.horizontal,
-    S.spacing, renderSpacingButtons);
+function syncSpacingSlider(){
+  syncSlider(S.spacing, $("spacingVal"), SPACING_RANGE[S.layout.value] || SPACING_RANGE.horizontal);
 }
-function renderBranchSpacingButtons(){
-  renderPresetButtons($("branchSpacingRow"), BRANCH_SPACING_PRESETS[S.layout.value] || BRANCH_SPACING_PRESETS.horizontal,
-    S.branchSpacing, renderBranchSpacingButtons);
+function syncBranchSpacingSlider(){
+  syncSlider(S.branchSpacing, $("branchSpacingVal"), BRANCH_SPACING_RANGE[S.layout.value] || BRANCH_SPACING_RANGE.horizontal);
 }
 
 /* The NS/EW/CC/... -> {name,colour,acr} table is user-editable at runtime.
@@ -1336,7 +1372,7 @@ CR17 Clementi            > EW23
 CR16 Maju
 CR15 King Albert Park    > DT6
 CR14 Turf City
-CR13 Bright Hill         > TE
+CR13 Bright Hill         > TE7
 CR12 Teck Ghee
 CR11 Ang Mo Kio          > NS16
 CR10 Tavistock
@@ -1429,7 +1465,8 @@ function readForm(){
     spacing:parseInt(S.spacing.value, 10) || 100,
     branchSpacing:parseInt(S.branchSpacing.value, 10) || 120,
     closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-    showBadge:S.showBadge.checked, opaque:S.opaque.checked,
+    showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
+    opaque:S.opaque.checked,
     dark: diagramDark,
     trunk, branches, errors
   };
@@ -1447,6 +1484,8 @@ function applyConfig(c){
   S.showCodes.checked = c.showCodes !== false;
   S.showIc.checked = c.showIc !== false;
   S.showBadge.checked = c.showBadge !== false;
+  S.showLegend.checked = c.showLegend !== false;
+  S.showAccent.checked = c.showAccent !== false;
   S.opaque.checked = c.opaque !== false;
   setDiagramDark(c.dark === true);
   if (c.lineInfo){
@@ -1475,8 +1514,8 @@ function syncVisibility(){
   const l = S.layout.value;
   $("closedField").style.display = l === "loop"  ? "" : "none";
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
-  renderSpacingButtons();
-  renderBranchSpacingButtons();
+  syncSpacingSlider();
+  syncBranchSpacingSlider();
 }
 
 function rotateLoop(dir){
@@ -1849,14 +1888,7 @@ $("dlPng").onclick = async () => {
 };
 
 $("dlJson").onclick = () => {
-  const c = readForm();
-  const data = {
-    name:c.name, code:c.code, colour:c.colour, layout:c.layout,
-    spacing:c.spacing, closed:c.closed, showCodes:c.showCodes, showIc:c.showIc,
-    showBadge:c.showBadge, opaque:c.opaque, dark:c.dark, spec:S.spec.value,
-    lineInfo:LINE_INFO
-  };
-  download(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }),
+  download(new Blob([JSON.stringify(snapshotConfig(), null, 2)], { type:"application/json" }),
            slug() + ".json");
 };
 
@@ -1880,7 +1912,8 @@ function snapshotConfig(){
     name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
     spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
     showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-    showBadge:S.showBadge.checked, opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
+    showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
+    opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
     lineInfo:LINE_INFO
   };
 }
@@ -1960,9 +1993,11 @@ SWATCHES.forEach(c => {
 });
 
 ["input", "change"].forEach(ev => {
-  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBadge, S.opaque, S.closed]
+  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
     .forEach(n => n.addEventListener(ev, render));
 });
+S.spacing.addEventListener("input", () => { $("spacingVal").textContent = S.spacing.value; render(); });
+S.branchSpacing.addEventListener("input", () => { $("branchSpacingVal").textContent = S.branchSpacing.value; render(); });
 S.colour.addEventListener("input", () => { S.hex.value = S.colour.value; render(); });
 S.hex.addEventListener("input", () => {
   const v = S.hex.value.trim();
