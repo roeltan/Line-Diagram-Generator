@@ -1217,11 +1217,25 @@ const PRESET_GROUPS = [
 const EXAMPLES = {
   ns:{
     name:"North-South Line", code:"NSL", colour:"#d42e12", layout:"horizontal",
-    spec:`NS1  Jurong East        > EW24, BUS
+    spec:`# STC proposal, not an official LTA project — LTA's real West Coast
+# Extension is on the Jurong Region Line, not here
+NW12 Marina South Pier > NS28 {proposed}
+NW11 Keppel Wharves    {proposed}
+NW10 Brani Resort      > SL16 {proposed}
+NW9  Keppel            > NE2, CC30 {proposed}
+NW8  Bukit Merah       > BT2, BUS {proposed}
+NW7  Portsdown         {proposed}
+NW6  Kent Ridge        > CC24 {proposed}
+NW5  Dover South       {proposed}
+NW4  University        {proposed}
+NW3  West Coast        > CR18, WP4 {proposed}
+NW2  Pandan Reservoir  {proposed}
+NW1  Jurong Town Hall  {proposed}
+NS1  Jurong East        > EW24, JE5, BUS
 NS2  Bukit Batok        > BUS
 NS3  Bukit Gombak
 NS3A Brickland          {future}
-NS4  Choa Chu Kang      > BP1, BUS
+NS4  Choa Chu Kang      > JS1, BP1, BUS
 NS5  Yew Tee
 NS6  Sungei Kadut       > DE2 {future}
 NS7  Kranji
@@ -1233,7 +1247,7 @@ NS12 Canberra
 NS13 Yishun             > BUS
 NS14 Khatib
 NS15 Yio Chu Kang       > BUS
-NS16 Ang Mo Kio         > BUS
+NS16 Ang Mo Kio         > CR11, BUS
 NS17 Bishan             > CC15, BUS
 NS18 Braddell
 NS19 Toa Payoh          > BUS
@@ -1245,23 +1259,7 @@ NS24 Dhoby Ghaut        > NE6, CC1
 NS25 City Hall          > EW13
 NS26 Raffles Place      > EW14
 NS27 Marina Bay         > CC33, TE20
-NS28 Marina South Pier
-
-# STC proposal, not an official LTA project — LTA's real West Coast
-# Extension is on the Jurong Region Line, not here
-[branch from NS1 down]
-NW1  Jurong Town Hall  {proposed}
-NW2  Pandan Reservoir  {proposed}
-NW3  West Coast        > CR18, WP4 {proposed}
-NW4  University        {proposed}
-NW5  Dover South       {proposed}
-NW6  Kent Ridge        > CC24 {proposed}
-NW7  Portsdown         {proposed}
-NW8  Bukit Merah       > BT2, BUS {proposed}
-NW9  Keppel            > NE2, CC30 {proposed}
-NW10 Brani Resort      > SL16 {proposed}
-NW11 Keppel Wharves    {proposed}
-NW12 Marina South Pier > NS28 {proposed}`
+NS28 Marina South Pier`
   },
   ew:{
     name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal",
@@ -1273,11 +1271,11 @@ EW31 Tuas Crescent
 EW30 Gul Circle
 EW29 Joo Koon             > BUS
 EW28 Pioneer
-EW27 Boon Lay              > BUS
+EW27 Boon Lay              > JS8, BUS
 EW26 Lakeside
 EW25 Chinese Garden
-EW24 Jurong East        > NS1
-EW23 Clementi              > BUS
+EW24 Jurong East        > NS1, JE5
+EW23 Clementi              > CR17, BUS
 EW22 Dover
 EW21 Buona Vista        > CC22
 EW20 Commonwealth
@@ -1299,7 +1297,7 @@ EW5  Bedok                 > BUS
 EW4  Tanah Merah
 EW3  Simei
 EW2  Tampines           > DT32*, BUS
-EW1  Pasir Ris             > BUS
+EW1  Pasir Ris             > CR5, BUS
 
 [branch from EW4 down shuttle CG]
 CG1  Expo               > DT35
@@ -1311,7 +1309,7 @@ CG3  Changi Airport Terminal 5 > CR1 {future}
 
 # STC proposal — LTA has provisioned space for this extension but has
 # no confirmed plans to construct it (as of 2024)
-[branch from EW30 down]
+[branch from EW30 down] {proposed}
 ES3  Tuas Basin                    {proposed}
 ES4  Tuas Shipyard                 {proposed}
 ES5  Tuas South                    {proposed}
@@ -1363,7 +1361,7 @@ CC2  Bras Basah
 CC1  Dhoby Ghaut        > NS24, NE6
 
 # STC proposal, not an official LTA project — shuttle from CC9's middle platform
-[branch from CC9 down]
+[branch from CC9 down] {proposed}
 CJ1  Joo Chiat         {proposed}
 CJ2  Marine Parade     > TE26 {proposed}
 CJ3  Parkway           > HL21 {proposed}`
@@ -1389,7 +1387,7 @@ NE13 Kovan
 NE14 Hougang            > CR8, BUS
 NE15 Buangkok           > BUS
 NE16 Sengkang           > STC, BUS
-NE17 Punggol            > PTC, BUS
+NE17 Punggol            > CP4, PTC, BUS
 NE18 Punggol Coast      > BUS`
   },
   dt:{
@@ -1402,7 +1400,7 @@ DT2  Cashew
 DT3  Hillview
 DT4  Hume
 DT5  Beauty World       > BUS
-DT6  King Albert Park
+DT6  King Albert Park   > CR15
 DT7  Sixth Avenue
 DT8  Tan Kah Kee
 DT9  Botanic Gardens    > CC19
@@ -1444,7 +1442,7 @@ TE3  Woodlands South
 TE4  Springleaf
 TE5  Lentor
 TE6  Mayflower
-TE7  Bright Hill
+TE7  Bright Hill        > CR13
 TE8  Upper Thomson
 TE9  Caldecott          > CC17
 TE10 Mount Pleasant
@@ -1634,7 +1632,7 @@ SL15 Southern Central     > WP10 {sir,proposed}
 SL16 Brani Resort         > NW10 {proposed}
 SL18 Beach Central        {proposed}
 
-[branch from SL3 down]
+[branch from SL3 down] {proposed}
 SP2  Miltonia             {proposed}
 SP3  Yishun Park          {proposed}
 SP4  Khatib Bongsu        {proposed}
@@ -1656,7 +1654,7 @@ BT10 Pang Sua             > ER21 {proposed}
 BT11 AFIP                 {proposed}
 BT12 Woodlands Frontier   {sir,proposed}
 
-[branch from BT10 down]
+[branch from BT10 down] {proposed}
 BE1  Turf Club            {proposed}
 BE2  Kranji               > NS7 {proposed}`
   },
