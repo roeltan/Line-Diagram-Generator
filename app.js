@@ -2234,20 +2234,27 @@ function syncVisibility(){
   syncBranchSpacingSlider();
 }
 
-function rotateLoop(dir){
+/* generalised so the same reverse/rotate logic works on any station list —
+   the main trunk, a single branch's own stations, or a balloon loop's own
+   stations — rather than being wired to live.trunk specifically. Rotate
+   CW/CCW only stays exposed for the trunk itself under Shape: Loop, since
+   "which station starts the loop" is only a meaningful question for a
+   closed loop; reverse (which end reads first) is meaningful for any list
+   so it's offered everywhere. */
+function rotateList(arr, dir){
   if (mode === "text") setLiveFromText(S.spec.value);   // pick up any unsynced text edits first
-  if (live.trunk.length < 2) return;
-  if (dir === "cw") live.trunk.push(live.trunk.shift());
-  else live.trunk.unshift(live.trunk.pop());
+  if (arr.length < 2) return;
+  if (dir === "cw") arr.push(arr.shift());
+  else arr.unshift(arr.pop());
   syncTextFromLive();
   if (mode === "editor") renderEditorRows();
   render();
 }
 
-function reverseTrunkOrder(){
+function reverseList(arr){
   if (mode === "text") setLiveFromText(S.spec.value);   // pick up any unsynced text edits first
-  if (live.trunk.length < 2) return;
-  live.trunk.reverse();
+  if (arr.length < 2) return;
+  arr.reverse();
   syncTextFromLive();
   if (mode === "editor") renderEditorRows();
   render();
@@ -2403,6 +2410,12 @@ function makeBranchBlock(b, bIdx){
   colourInp.oninput = () => { b.colour = colourInp.value; syncTextFromLive(); render(); };
   head.appendChild(colourInp);
 
+  const revBtn = document.createElement("button");
+  revBtn.type = "button"; revBtn.className = "icon"; revBtn.textContent = "⇅";
+  revBtn.title = "Reverse this branch's station order";
+  revBtn.onclick = () => reverseList(b.stations);
+  head.appendChild(revBtn);
+
   const delBtn = document.createElement("button");
   delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove branch";
   delBtn.onclick = () => { live.branches.splice(bIdx, 1); syncTextFromLive(); renderEditorRows(); render(); };
@@ -2488,6 +2501,12 @@ function makeLoopBlock(lp, lpIdx){
   colourInp.value = lp.colour || S.colour.value;
   colourInp.oninput = () => { lp.colour = colourInp.value; syncTextFromLive(); render(); };
   head.appendChild(colourInp);
+
+  const revBtn = document.createElement("button");
+  revBtn.type = "button"; revBtn.className = "icon"; revBtn.textContent = "⇅";
+  revBtn.title = "Reverse this loop's station order";
+  revBtn.onclick = () => reverseList(lp.stations);
+  head.appendChild(revBtn);
 
   const delBtn = document.createElement("button");
   delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove loop";
@@ -2874,9 +2893,9 @@ $("addLineInfoBtn").onclick = () => {
 };
 $("modeEditorBtn").onclick = () => setMode("editor");
 $("modeTextBtn").onclick = () => setMode("text");
-$("loopRotateCw").onclick = () => rotateLoop("cw");
-$("loopRotateCcw").onclick = () => rotateLoop("ccw");
-$("reverseOrderBtn").onclick = reverseTrunkOrder;
+$("loopRotateCw").onclick = () => rotateList(live.trunk, "cw");
+$("loopRotateCcw").onclick = () => rotateList(live.trunk, "ccw");
+$("reverseOrderBtn").onclick = () => reverseList(live.trunk);
 
 function renderPresetRow(){
   const container = $("presetRow");

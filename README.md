@@ -138,8 +138,10 @@ for a balloon loop to hang off.
 The **Editor** view (default) gives you a row-based UI for all of this — add/
 reorder/delete stations and branches without touching text. The **⇅** button
 next to the Editor/Text toggle reverses the trunk's station order in place
-(handy for flipping which end a line reads from without retyping it). Switch
-to **Text** to paste/edit the raw syntax directly, or to copy it out.
+(handy for flipping which end a line reads from without retyping it) — every
+branch and balloon loop block has its own **⇅** too, reversing just that
+list. Switch to **Text** to paste/edit the raw syntax directly, or to copy
+it out.
 
 ### Roadmap tiers (Current / Future / Proposed)
 
