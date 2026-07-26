@@ -55,6 +55,10 @@ CODE  Station Name  > IC1, IC2
   more lines/prefixes). Add the reserved code `BUS` to that list to mark a
   nearby bus interchange — it renders as its own icon instead of a colour
   caplet, and is toggled separately ("Show bus interchanges").
+- Tag a station with `{sir}` to mark it as a SIR express-service stop — it
+  renders with a dark outline around its own caplet instead of the usual light
+  one, toggled separately ("Show SIR express stops"). Combine with a roadmap
+  tag using a comma, e.g. `{proposed,sir}`.
 - Use `CODE | Name` instead if the name would otherwise be ambiguous.
 - `#` starts a comment line.
 

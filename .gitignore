@@ -1,5 +1,6 @@
 fonts/
 
-# reference material only (not ours to redistribute) — used as a data
-# source for the STL preset, never bundled into the app itself
-Seletar Tengah Line Speculative Map.png
+# reference material only (not ours to redistribute) — fan-made maps/docs and
+# other third-party assets used as data sources or design references, never
+# bundled into the app itself
+reference/

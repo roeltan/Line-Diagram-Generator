@@ -13,11 +13,15 @@ const SVGNS = "http://www.w3.org/2000/svg";
    Edit/extend freely; unknown prefixes fall back to the current line. */
 const LINE_INFO = {
   NS:{ name:"North-South Line", colour:"#d42e12", acr:"NSL" },
+  NW:{ name:"North-South Line", colour:"#d42e12", acr:"NSL" },
   EW:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
   CG:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
+  ES:{ name:"East-West Line", colour:"#009645", acr:"EWL" },
   NE:{ name:"North East Line", colour:"#9900aa", acr:"NEL" },
+  NP:{ name:"North East Line", colour:"#9900aa", acr:"NEL" },
   CC:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
   CE:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
+  CJ:{ name:"Circle Line", colour:"#fa9e0d", acr:"CCL" },
   DT:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL" },
   DE:{ name:"Downtown Line", colour:"#005ec4", acr:"DTL" },
   TE:{ name:"Thomson-East Coast Line", colour:"#9d5b25", acr:"TEL" },
@@ -64,7 +68,8 @@ const STYLE = {
   icStroke:"#33383d",
   nameSize:14, nameWeight:600, nameFill:"#1b1f24",
   codeSize:10.5, codeH:20, codeGap:14,
-  capletOutlineW:1.3
+  capletOutlineW:1.3,
+  sirOutlineColour:"#1b1f24", sirPad:0
 };
 const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif';
 
@@ -152,14 +157,21 @@ const BUS_ICON_GLYPH = "m 9.18888,6.78872 c 0,0.25435 -0.26635,0.66851 -3.08151,
    lists) lets a future/proposed station slot into its real position in the
    sequence, e.g. an infill station between two already-open ones. */
 const TIER_RANK = { current:0, future:1, proposed:2 };
-const TIER_TAG_RE = /\s*\{(future|proposed)\}\s*$/i;
+/* {future}/{proposed} set the roadmap tier; an additional `sir` token (e.g.
+   {proposed,sir} or {proposed sir}) marks a station as a SIR express-service
+   stop — independent of tier, since express stops exist on current, future,
+   and proposed lines alike. */
+const TAG_RE = /\s*\{([a-z, ]+)\}\s*$/i;
 function stripTier(s){
-  const m = TIER_TAG_RE.exec(s);
-  return { text: m ? s.slice(0, m.index) : s, tier: m ? m[1].toLowerCase() : "current" };
+  const m = TAG_RE.exec(s);
+  if (!m) return { text: s, tier: "current", sir: false };
+  const tokens = m[1].toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const tier = tokens.find(t => t === "future" || t === "proposed") || "current";
+  return { text: s.slice(0, m.index), tier, sir: tokens.includes("sir") };
 }
 
 function parseStation(s){
-  const { text: tagStripped, tier } = stripTier(s);
+  const { text: tagStripped, tier, sir } = stripTier(s);
   s = tagStripped;
   let left = s, ics = [];
   const gi = s.indexOf(">");
@@ -178,7 +190,7 @@ function parseStation(s){
     if (m){ code = m[1]; name = m[2].trim(); }
     else if (/^[A-Z]{1,4}\d{0,3}[A-Za-z]?$/.test(left)){ code = left; name = ""; }
   }
-  return { code, name, ics, tier };
+  return { code, name, ics, tier, sir };
 }
 
 function parseSpec(text){
@@ -721,6 +733,7 @@ function buildDiagram(cfg){
     const h = STYLE.codeH;
     let codesExtent = 0;
     let farEdge = null;   // coordinate just past the last code, along dir's axis — where the bus icon (if any) continues from
+    let ownCapletBox = null;   // bounding box of the station's own caplet — ringed separately if it's a SIR express stop
 
     const OSI_GAP = 12;   // gap that stands an out-of-station code apart, bridged by a connector line
 
@@ -748,8 +761,9 @@ function buildDiagram(cfg){
       for (let i = 1; i < segs.length; i++){
         if (segs[i].cd.osi) runs.push([segs[i]]); else runs[runs.length-1].push(segs[i]);
       }
-      runs.forEach(run => {
+      runs.forEach((run, runIdx) => {
         const rx0 = Math.min(...run.map(s => s.x0)), rx1 = Math.max(...run.map(s => s.x1));
+        if (runIdx === 0) ownCapletBox = { x:rx0, y:y0, w:rx1-rx0, h };
         clipCounter++;
         const clipId = `cap-clip-${clipCounter}`;
         const clip = el("clipPath", { id:clipId }, defs);
@@ -787,7 +801,7 @@ function buildDiagram(cfg){
       codes.forEach((cd, idx) => {
         const w = codeBoxW(cd.t);
         let cy;
-        if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); }
+        if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h }; }
         else {
           const gapStart = edge;
           edge = edge + dir[1]*(cd.osi ? OSI_GAP : 0);
@@ -806,6 +820,18 @@ function buildDiagram(cfg){
       });
       codesExtent = Math.abs(edge - n.y);
       farEdge = edge;
+    }
+
+    /* SIR express-service stop — a dark outline ring around the station's
+       own caplet (not its interchange codes), echoing the emphasis used for
+       interchanges on some overseas metro maps but repurposed here to flag
+       express stops instead. */
+    if (cfg.showSir && n.sir && ownCapletBox){
+      const pad = STYLE.sirPad;
+      el("path", { d:capletPath(ownCapletBox.x - pad, ownCapletBox.y - pad,
+                                 ownCapletBox.w + pad*2, ownCapletBox.h + pad*2),
+                   fill:"none", stroke:STYLE.sirOutlineColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
+      bb.rect(ownCapletBox.x - pad*2, ownCapletBox.y - pad*2, ownCapletBox.w + pad*4, ownCapletBox.h + pad*4);
     }
 
     /* bus interchange icon — a reserved "BUS" entry in the interchange
@@ -1021,7 +1047,7 @@ const $ = id => document.getElementById(id);
 const S = {
   spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
   hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"), branchSpacing:$("branchSpacing"),
-  closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"),
+  closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"), showSir:$("showSir"),
   showBadge:$("showBadge"), showLegend:$("showLegend"), showAccent:$("showAccent"), opaque:$("opaque")
 };
 let zoom = 1, current = null;
@@ -1189,26 +1215,26 @@ const PRESET_GROUPS = [
 const EXAMPLES = {
   ns:{
     name:"North-South Line", code:"NSL", colour:"#d42e12", layout:"horizontal",
-    spec:`NS1  Jurong East        > EW24
-NS2  Bukit Batok
+    spec:`NS1  Jurong East        > EW24, BUS
+NS2  Bukit Batok        > BUS
 NS3  Bukit Gombak
 NS3A Brickland          {future}
-NS4  Choa Chu Kang      > BP1
+NS4  Choa Chu Kang      > BP1, BUS
 NS5  Yew Tee
 NS6  Sungei Kadut       > DE2 {future}
 NS7  Kranji
 NS8  Marsiling
-NS9  Woodlands          > TE2
+NS9  Woodlands          > TE2, BUS
 NS10 Admiralty
-NS11 Sembawang
+NS11 Sembawang          > BUS
 NS12 Canberra
-NS13 Yishun
+NS13 Yishun             > BUS
 NS14 Khatib
-NS15 Yio Chu Kang
-NS16 Ang Mo Kio
-NS17 Bishan             > CC15
+NS15 Yio Chu Kang       > BUS
+NS16 Ang Mo Kio         > BUS
+NS17 Bishan             > CC15, BUS
 NS18 Braddell
-NS19 Toa Payoh
+NS19 Toa Payoh          > BUS
 NS20 Novena
 NS21 Newton             > DT11*
 NS22 Orchard            > TE14
@@ -1217,21 +1243,39 @@ NS24 Dhoby Ghaut        > NE6, CC1
 NS25 City Hall          > EW13
 NS26 Raffles Place      > EW14
 NS27 Marina Bay         > CC33, TE20
-NS28 Marina South Pier`
+NS28 Marina South Pier
+
+# STC proposal, not an official LTA project — LTA's real West Coast
+# Extension is on the Jurong Region Line, not here
+[branch from NS1 down]
+NW1  Jurong Town Hall  {proposed}
+NW2  Pandan Reservoir  {proposed}
+NW3  West Coast        > CR18, WP4 {proposed}
+NW4  University        {proposed}
+NW5  Dover South       {proposed}
+NW6  Kent Ridge        > CC24 {proposed}
+NW7  Portsdown         {proposed}
+NW8  Bukit Merah       > BT2, BUS {proposed}
+NW9  Keppel            > NE2, CC30 {proposed}
+NW10 Brani Resort      > SL16 {proposed}
+NW11 Keppel Wharves    {proposed}
+NW12 Marina South Pier > NS28 {proposed}`
   },
   ew:{
     name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal",
-    spec:`EW33 Tuas Link
+    spec:`# STC proposal — unmarked extension beyond EW33, not an official LTA project
+EW34 Tuas Frontier       > CR26 {proposed}
+EW33 Tuas Link
 EW32 Tuas West Road
 EW31 Tuas Crescent
 EW30 Gul Circle
-EW29 Joo Koon
+EW29 Joo Koon             > BUS
 EW28 Pioneer
-EW27 Boon Lay
+EW27 Boon Lay              > BUS
 EW26 Lakeside
 EW25 Chinese Garden
 EW24 Jurong East        > NS1
-EW23 Clementi
+EW23 Clementi              > BUS
 EW22 Dover
 EW21 Buona Vista        > CC22
 EW20 Commonwealth
@@ -1244,20 +1288,33 @@ EW14 Raffles Place      > NS26
 EW13 City Hall          > NS25
 EW12 Bugis              > DT14
 EW11 Lavender
-EW10 Kallang
+EW10 Kallang               > BUS
 EW9  Aljunied
 EW8  Paya Lebar         > CC9
-EW7  Eunos
+EW7  Eunos                 > BUS
 EW6  Kembangan
-EW5  Bedok
+EW5  Bedok                 > BUS
 EW4  Tanah Merah
 EW3  Simei
-EW2  Tampines           > DT32*
-EW1  Pasir Ris
+EW2  Tampines           > DT32*, BUS
+EW1  Pasir Ris             > BUS
 
 [branch from EW4 down shuttle CG]
 CG1  Expo               > DT35
-CG2  Changi Airport`
+CG2  Changi Airport
+# CAL2TEL — officially announced Jul 2025: the Changi Airport Branch Line
+# converts to the Thomson-East Coast Line by 2031, with a new terminal
+# station. Light-touch addition here rather than a full EWL->TEL remodel.
+CG3  Changi Airport Terminal 5 > CR1 {future}
+
+# STC proposal — LTA has provisioned space for this extension but has
+# no confirmed plans to construct it (as of 2024)
+[branch from EW30 down]
+ES3  Tuas Basin                    {proposed}
+ES4  Tuas Shipyard                 {proposed}
+ES5  Tuas South                    {proposed}
+ES6  Tuas South Recreation Centre  {proposed}
+ES7  Tuas Port Gate                {proposed}`
   },
   cc:{
     /* Circle Line Stage 6 (Keppel / Cantonment / Prince Edward Road) opened
@@ -1278,7 +1335,7 @@ CC17 Caldecott          > TE9
 CC16 Marymount
 CC15 Bishan             > NS17
 CC14 Lorong Chuan
-CC13 Serangoon          > NE12
+CC13 Serangoon          > NE12, BUS
 CC12 Bartley
 CC11 Tai Seng
 CC10 MacPherson         > DT26
@@ -1293,7 +1350,7 @@ CC33 Marina Bay         > NS27, TE20
 CC32 Prince Edward Road
 CC31 Cantonment
 CC30 Keppel
-CC29 HarbourFront       > NE1, EW17
+CC29 HarbourFront       > NE1, EW17, BUS
 CC28 Telok Blangah
 CC27 Labrador Park
 CC26 Pasir Panjang
@@ -1301,11 +1358,21 @@ CC26 Pasir Panjang
 [branch from CC4 up]
 CC3  Esplanade
 CC2  Bras Basah
-CC1  Dhoby Ghaut        > NS24, NE6`
+CC1  Dhoby Ghaut        > NS24, NE6
+
+# STC proposal, not an official LTA project — shuttle from CC9's middle platform
+[branch from CC9 down]
+CJ1  Joo Chiat         {proposed}
+CJ2  Marine Parade     > TE26 {proposed}
+CJ3  Parkway           > HL21 {proposed}`
   },
   ne:{
     name:"North East Line", code:"NEL", colour:"#9900aa", layout:"horizontal",
-    spec:`NE1  HarbourFront        > CC29
+    spec:`# STC proposal, not an official LTA project
+NP3  Pasir Panjang      > CC26 {proposed}
+NP2  Power District     {proposed}
+NP1  Berlayer           {proposed}
+NE1  HarbourFront        > CC29, BUS
 NE3  Outram Park        > EW16, TE17
 NE4  Chinatown          > DT19
 NE5  Clarke Quay
@@ -1314,22 +1381,25 @@ NE7  Little India       > DT12
 NE8  Farrer Park
 NE9  Boon Keng
 NE10 Potong Pasir
-NE11 Woodleigh
-NE12 Serangoon          > CC13
+NE11 Woodleigh          > BUS
+NE12 Serangoon          > CC13, BUS
 NE13 Kovan
-NE14 Hougang            > CR8
-NE15 Buangkok
-NE16 Sengkang           > STC
-NE17 Punggol            > PTC
-NE18 Punggol Coast`
+NE14 Hougang            > CR8, BUS
+NE15 Buangkok           > BUS
+NE16 Sengkang           > STC, BUS
+NE17 Punggol            > PTC, BUS
+NE18 Punggol Coast      > BUS`
   },
   dt:{
     name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal",
-    spec:`DT1  Bukit Panjang      > BP6*
+    spec:`# DTL Stage 2 Extension (DTL2e) — confirmed real LTA project
+DE2  Sungei Kadut       > NS6, ER22 {future}
+DE1  Stagmont           {future}
+DT1  Bukit Panjang      > BP6*, BT9, BUS
 DT2  Cashew
 DT3  Hillview
 DT4  Hume
-DT5  Beauty World
+DT5  Beauty World       > BUS
 DT6  King Albert Park
 DT7  Sixth Avenue
 DT8  Tan Kah Kee
@@ -1348,7 +1418,8 @@ DT20 Fort Canning
 DT21 Bencoolen
 DT22 Jalan Besar
 DT23 Bendemeer
-DT25 Geylang Bahru
+DT24 Geylang Bahru
+DT25 Mattar
 DT26 MacPherson         > CC10
 DT27 Ubi
 DT28 Kaki Bukit
@@ -1366,7 +1437,7 @@ DT37 Sungei Bedok       > TE31 {future}`
   te:{
     name:"Thomson-East Coast Line", code:"TEL", colour:"#9d5b25", layout:"horizontal",
     spec:`TE1  Woodlands North     > RTS*
-TE2  Woodlands          > NS9
+TE2  Woodlands          > NS9, BUS
 TE3  Woodlands South
 TE4  Springleaf
 TE5  Lentor
@@ -1396,7 +1467,7 @@ TE27 Marine Terrace
 TE28 Siglap
 TE29 Bayshore
 # Bedok South and Sungei Bedok are under testing, due 2H 2026
-TE30 Bedok South              {future}
+TE30 Bedok South        > BUS {future}
 TE31 Sungei Bedok       > DT37 {future}`
   },
   stl:{
@@ -1495,45 +1566,147 @@ CT50 | Beach Central`
   },
   hll:{
     name:"Holland-Long Island Line", code:"HLL", colour:"#e8467c", layout:"horizontal",
-    spec:`HL1  First Station
-HL2  Second Station
-HL3  Third Station`
+    spec:`# STC proposal — core corridor only; the Long Island reclamation extension
+# and TEL2HLL conversion tail lie beyond this Plan's 2050 scope
+HL1  Tawas               > JW2 {proposed}
+HL2  Bulim               {proposed}
+HL3  Innovation District {proposed}
+HL4  Tengah              > JS3 {proposed}
+HL5  Brickworks          {proposed}
+HL6  Bukit Batok         > NS2 {proposed}
+HL7  Burgundy            {proposed}
+HL8  Maju                > CR16, BT6 {proposed}
+HL9  Jelita              {proposed}
+HL10 Holland Village     > CC21 {proposed}
+HL11 Dempsey             {proposed}
+HL12 Napier              > TE12 {proposed}
+HL13 Great World         > TE15 {proposed}
+HL14 Dhoby Ghaut         > NS24, NE6 {proposed}
+HL15 Bras Basah          {proposed}
+HL16 Esplanade           > SL11 {proposed}
+HL17 Promenade           > CC4, DT15 {proposed}
+HL18 Founders' Memorial  > TE22A {proposed}`
   },
   wpr:{
     name:"West Coast-Punggol Railway", code:"WPR", colour:"#c7a173", layout:"horizontal",
-    spec:`WP1  First Station
-WP2  Second Station
-WP3  Third Station`
+    spec:`# STC proposal, not an official LTA project
+WP1  Lakeside             > EW26 {proposed}
+WP2  Taman Jurong         {proposed}
+WP3  Jurong Lake District > CR19 {sir,proposed}
+WP4  West Coast           > CR18, NW3 {proposed}
+WP5  West Coast Park      {proposed}
+WP6  City Harbour         {proposed}
+WP7  Pelabuhan Bahru      {proposed}
+WP8  Pasir Panjang        > NP3, CC26 {sir,proposed}
+WP9  HarbourFront         > NE1, CC29 {sir,proposed}
+WP10 Southern Central     > SL15 {sir,proposed}
+WP11 Marina South         > TE21 {sir,proposed}
+WP12 Marina East          {sir,proposed}
+WP13 Katong Park          > TE24 {proposed}
+WP14 Mountbatten          > CC7 {proposed}
+WP15 Aljunied             > EW9 {proposed}
+WP16 Mattar               > DT25 {proposed}
+WP17 Bartley              > CC12 {proposed}
+WP18 Hougang South        {proposed}
+WP20 Airbase Central      > ER8 {sir,proposed}
+WP22 Lorong Halus         > NC3 {proposed}
+WP23 Punggol East         {proposed}
+WP24 Punggol Coast        > NE18 {proposed}`
   },
   sll:{
     name:"Seletar Line", code:"SLL", colour:"#f9cb9c", layout:"horizontal",
-    spec:`SL1  First Station
-SL2  Second Station
-SL3  Third Station`
+    spec:`# STC proposal, not an official LTA project
+SL2  Seletar Airport      > NC6 {proposed}
+SL3  Sengkang West        > ER14 {proposed}
+SL5  Tavistock            > CR10 {proposed}
+SL6  Lorong Chuan         > CC14 {proposed}
+SL7  Kim Keat             {proposed}
+SL8  Whampoa              {proposed}
+SL9  Farrer Park          > NE8 {proposed}
+SL10 Selegie              > DT13, DT22 {proposed}
+SL11 Esplanade            > HL16 {proposed}
+SL12 Raffles Place        > NS26, EW14 {proposed}
+SL13 Straits View         > DT17, TE19 {proposed}
+SL14 Prince Edward Road   > CC1 {proposed}
+SL15 Southern Central     > WP10 {sir,proposed}
+SL16 Brani Resort         > NW10 {proposed}
+SL18 Beach Central        {proposed}
+
+[branch from SL3 down]
+SP2  Miltonia             {proposed}
+SP3  Yishun Park          {proposed}
+SP4  Khatib Bongsu        {proposed}
+SP5  Simpang Bahru        > NC8 {sir,proposed}`
   },
   btr:{
     name:"Bukit Timah Railway", code:"BTR", colour:"#ed5e0c", layout:"horizontal",
-    spec:`BT1  First Station
-BT2  Second Station
-BT3  Third Station`
+    spec:`# STC proposal, not an official LTA project
+BT1  Cantonment           > CC31 {proposed}
+BT2  Bukit Merah          > NW8 {sir,proposed}
+BT3  Alexandra            {proposed}
+BT4  Tanglin Halt         {proposed}
+BT5  Buona Vista          > EW21, CC22 {sir,proposed}
+BT6  Maju                 > CR16, HL8 {proposed}
+BT7  Beauty World         > DT5 {sir,proposed}
+BT8  Hillview             > DT3 {proposed}
+BT9  Bukit Panjang        > DT1 {sir,proposed}
+BT10 Pang Sua             > ER21 {proposed}
+BT11 AFIP                 {proposed}
+BT12 Woodlands Frontier   {sir,proposed}
+
+[branch from BT10 down]
+BE1  Turf Club            {proposed}
+BE2  Kranji               > NS7 {proposed}`
   },
   erl:{
     name:"Eastern Region Line", code:"ERL", colour:"#cc2680", layout:"horizontal",
-    spec:`ER1  First Station
-ER2  Second Station
-ER3  Third Station`
+    spec:`# STC proposal, not an official LTA project
+ER1  Long Island Central  {sir,proposed}
+ER2  Bedok South          > TE30 {proposed}
+ER3  Temasek              {proposed}
+ER4  Bedok                > EW5 {proposed}
+ER5  Bedok North          > DT29 {proposed}
+ER6  Bedok Reservoir West {proposed}
+ER7  Batak                {proposed}
+ER8  Airbase Central      > WP20 {proposed}
+ER9  Kampong Teban        {proposed}
+ER10 Upper Serangoon      {proposed}
+ER11 Buangkok             > NE15 {proposed}
+ER12 Tongkang             {proposed}
+ER13 Fernvale             {proposed}
+ER14 Sengkang West        > SL3 {proposed}
+ER15 Amoy Quee            {proposed}
+ER16 Lower Seletar Reservoir {proposed}
+ER17 Springleaf           > TE4 {proposed}
+ER19 Mandai Wildlife Reserve {proposed}
+ER20 Mandai Hill          {proposed}
+ER21 Pang Sua             > BT10 {proposed}
+ER22 Sungei Kadut         > NS6, DE2 {proposed}`
   },
   nrl:{
     name:"Northern Rail Link", code:"NRL", colour:"#900000", layout:"horizontal",
-    spec:`NR1  First Station
-NR2  Second Station
-NR3  Third Station`
+    spec:`# STC proposal, not an official LTA project
+NR1  Chencharu            {proposed}
+NR2  Chong Pang           {proposed}
+NR3  Kemuning             {proposed}
+NR4  Sembawang            > NS11 {proposed}
+NR5  Sembawang North      > NC11 {proposed}
+NR6  Sembawang Shipyard   {proposed}`
   },
   ncl:{
     name:"North Coast Line", code:"NCL", colour:"#3c78d8", layout:"horizontal",
-    spec:`NC1  First Station
-NC2  Second Station
-NC3  Third Station`
+    spec:`# STC proposal, not an official LTA project
+NC1  Pasir Ris            > CR5, EW1 {sir,proposed}
+NC2  Elias                {proposed}
+NC3  Lorong Halus         > WP22 {proposed}
+NC4  Riviera              {proposed}
+NC5  Punggol              > NE17, PTC {sir,proposed}
+NC6  Seletar Airport      > SL2 {proposed}
+NC7  Yishun East          {proposed}
+NC8  Simpang Bahru        > SP5 {sir,proposed}
+NC11 Sembawang North      > NR5 {proposed}
+NC12 Attap Valley         {proposed}
+NC13 Woodlands North      > TE1, RTS {sir,proposed}`
   },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
@@ -1630,11 +1803,17 @@ function esc(s){
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
+function tagSuffix(tier, sir){
+  const parts = [];
+  if (tier && tier !== "current") parts.push(tier);
+  if (sir) parts.push("sir");
+  return parts.length ? ` {${parts.join(",")}}` : "";
+}
 function stLineText(st){
   const code = (st.code || "").trim(), name = (st.name || "").trim();
   let s = code ? (name ? `${code} | ${name}` : code) : name;
   if (st.ics && st.ics.length) s += `  > ${st.ics.join(", ")}`;
-  if (st.tier && st.tier !== "current") s += ` {${st.tier}}`;
+  s += tagSuffix(st.tier, st.sir);
   return s || "?";
 }
 function branchHeaderText(b){
@@ -1645,7 +1824,7 @@ function branchHeaderText(b){
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.colour) s += `: ${b.colour}`;
   s += "]";
-  if (b.tier && b.tier !== "current") s += ` {${b.tier}}`;
+  s += tagSuffix(b.tier, false);
   return s;
 }
 function syncTextFromLive(){
@@ -1685,7 +1864,7 @@ function readForm(){
     spacing:parseInt(S.spacing.value, 10) || 100,
     branchSpacing:parseInt(S.branchSpacing.value, 10) || 120,
     closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-    showBus:S.showBus.checked,
+    showBus:S.showBus.checked, showSir:S.showSir.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked,
     dark: diagramDark,
@@ -1705,6 +1884,7 @@ function applyConfig(c){
   S.showCodes.checked = c.showCodes !== false;
   S.showIc.checked = c.showIc !== false;
   S.showBus.checked = c.showBus !== false;
+  S.showSir.checked = c.showSir !== false;
   S.showBadge.checked = c.showBadge !== false;
   S.showLegend.checked = c.showLegend !== false;
   S.showAccent.checked = c.showAccent !== false;
@@ -2133,7 +2313,7 @@ function snapshotConfig(){
   return {
     name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
     spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
-    showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked,
+    showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked, showSir:S.showSir.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
     lineInfo:LINE_INFO
@@ -2215,7 +2395,7 @@ SWATCHES.forEach(c => {
 });
 
 ["input", "change"].forEach(ev => {
-  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBus, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
+  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBus, S.showSir, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
     .forEach(n => n.addEventListener(ev, render));
 });
 S.spacing.addEventListener("input", () => { $("spacingVal").textContent = S.spacing.value; render(); });
