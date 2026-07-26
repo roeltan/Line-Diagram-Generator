@@ -772,67 +772,79 @@ function buildDiagram(cfg){
 
   /* ---- trunk end-loops: a balloon loop that's part of the TRUNK's own
      shape (Bukit Panjang LRT's loop off Bukit Panjang, or Sengkang LRT's
-     East/West loops off the shared Sengkang station) — not a branch, it
-     attaches to whichever end of the trunk's own station list it names and
-     rejoins that same end. Reuses the same racetrack geometry the
-     whole-diagram loop layout uses, sized to its own station count.
-     Stations sit on whichever long edge of the racetrack ends up farther
-     from the trunk; the near edge (plus both short ends) is bare return
-     track, and the stem is drawn once — it's the same physical track
-     walked in both directions, so drawing it once already reads right. */
+     East/West loops off the shared Sengkang station) — not a branch. It
+     attaches to whichever end of the trunk's own station list it names,
+     with that station (jn) sitting exactly at the apex of a true stadium's
+     near semicircular cap — no separate connecting stem at all, matching
+     how real balloon-loop maps draw it (e.g. Bukit Panjang LRT: the trunk
+     runs straight into Bukit Panjang, which forks directly into two rows
+     that reconverge at a single far-cap station, Fajar). Station count N
+     splits into floor(N/2) per row, with the odd one out (if N is odd)
+     landing exactly on the far cap's own apex. */
   (loops || []).forEach(lp => {
-    if (!lp.stations.length) return;
+    const count = lp.stations.length;
+    if (!count) return;
     const jn = lp.at === "start" ? nodes[0] : nodes[trunkCount - 1];
     if (!jn) return;
     const bc = lp.colour || colour;
-    const gap = branchGap;
 
-    const count = lp.stations.length;
-    const r = Math.min(32, Math.max(20, sp * 0.4));
-    const rowLen = Math.max((count - 1) * sp, 1);
-    const loopW = rowLen + 2 * r, loopH = 2 * r;   // loopH === 2r on purpose: a stadium/pill with no straight sides
-    const sgn = lp.dir === "up" ? -1 : 1;          // which side of the trunk it bulges to
-    const growSgn = lp.grow === "left" ? -1 : 1;   // which way it extends from the anchor
-    const x0 = growSgn > 0 ? jn.x : jn.x - loopW;
-    const x1 = x0 + loopW;
-    const y0 = sgn < 0 ? jn.y - gap - loopH : jn.y + gap;
-    const y1 = y0 + loopH;
-    const rt = racetrack(x0, y0, x1, y1, r);
-    const onTopRow = sgn < 0;   // far-from-trunk row: top (y0) if bulging up, bottom (y1) if bulging down
+    const r = Math.max(56, sp * 0.9);
+    const buf = Math.max(20, r * 0.35);   // a short straight run past jn before the fork starts curving
+    const half = Math.floor(count / 2), extra = count % 2;
+    const rowLen = Math.max(half * sp, 1);
+    const loopW = buf + rowLen + 2 * r;
 
-    /* Exact perimeter (`t`) values for the racetrack's 4 corners — see
-       racetrack()'s own segment order (top row, corner, right side,
-       corner, bottom row [right-to-left], corner, left side, corner).
-       Computed directly rather than via at()'s own boundary handling,
-       which is ambiguous exactly at a row's endpoints. */
-    const cornerLen = r * Math.PI / 2;
-    const tTopRight = rowLen, tBottomRight = rowLen + 2 * cornerLen, tBottomLeft = 2 * rowLen + 2 * cornerLen;
+    /* Which way the loop extends: auto-continue the trunk's own reading
+       direction when it has one (2+ trunk stations); otherwise (a single-
+       station trunk, e.g. Sengkang, which has no direction of its own)
+       fall back to the explicit up/down/left/right token. */
+    const neighbour = lp.at === "start" ? nodes[1] : nodes[trunkCount - 2];
+    let axisHoriz, axisSgn;
+    if (neighbour && (neighbour.x !== jn.x || neighbour.y !== jn.y)){
+      const dx = jn.x - neighbour.x, dy = jn.y - neighbour.y;
+      axisHoriz = Math.abs(dx) >= Math.abs(dy);
+      axisSgn = axisHoriz ? (dx >= 0 ? 1 : -1) : (dy >= 0 ? 1 : -1);
+    } else if (lp.dir === "up"){ axisHoriz = false; axisSgn = -1; }
+    else if (lp.dir === "down"){ axisHoriz = false; axisSgn = 1; }
+    else if (lp.dir === "left"){ axisHoriz = true; axisSgn = -1; }
+    else { axisHoriz = true; axisSgn = 1; }
 
-    let entryT, startT, stepSign;
-    if (onTopRow){
-      // stations run along the top row (t=0 at its left end, t=rowLen at its right)
-      if (growSgn > 0){ entryT = tBottomLeft; startT = 0; stepSign = 1; }
-      else            { entryT = tBottomRight; startT = tTopRight; stepSign = -1; }
-    } else {
-      // stations run along the bottom row (t=tBottomRight at its right end, t=tBottomLeft at its left)
-      if (growSgn > 0){ entryT = 0; startT = tBottomLeft; stepSign = -1; }
-      else            { entryT = tTopRight; startT = tBottomRight; stepSign = 1; }
-    }
+    /* Row A sits on the "before" side (top, if horizontal; left, if
+       vertical) and Row B on the "after" side, purely by convention — real
+       systems split services (e.g. clockwise/anti-clockwise) arbitrarily
+       between the two anyway. */
+    const along = (d) => axisHoriz ? { x: jn.x + axisSgn * d, y: jn.y } : { x: jn.x, y: jn.y + axisSgn * d };
+    const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
+    const bufPoint = along(buf);
+    const nearCenter = along(buf + r), farCenter = along(buf + r + rowLen);
+    const rowANear = across(nearCenter, -r), rowAFar = across(farCenter, -r);
+    const rowBNear = across(nearCenter, r), rowBFar = across(farCenter, r);
+    const farApex = along(loopW);
+
+    const F = v => v.toFixed(2);
+    const pt = p => `${F(p.x)} ${F(p.y)}`;
+    /* Short straight run from jn to bufPoint, quarter-arc around nearCenter
+       to rowANear, half-arc around farCenter to rowBFar, quarter-arc around
+       nearCenter from rowBNear back to bufPoint, straight run back to jn —
+       sweep flags picked so the whole thing bulges outward (away from jn)
+       rather than folding back on itself; flipped by axisSgn/axisHoriz so
+       it stays consistent whichever way the loop actually extends. */
+    const sweep = (axisHoriz ? axisSgn > 0 : axisSgn < 0) ? 1 : 0;
+    const d = `M ${pt(jn)} L ${pt(bufPoint)} ` +
+              `A ${F(r)} ${F(r)} 0 0 ${sweep} ${pt(rowANear)} ` +
+              `L ${pt(rowAFar)} ` +
+              `A ${F(r)} ${F(r)} 0 1 ${sweep} ${pt(rowBFar)} ` +
+              `L ${pt(rowBNear)} ` +
+              `A ${F(r)} ${F(r)} 0 0 ${sweep} ${pt(bufPoint)} L ${pt(jn)}`;
+    drawBranchLine(d, bc, false);
+
     lp.stations.forEach((st, i) => {
-      const p = rt.at(startT + stepSign * i * sp);
+      let p;
+      if (i < half) p = across(along(buf + r + i * sp), -r);                  // Row A, near -> far
+      else if (extra && i === half) p = farApex;                              // the odd one out, at the far cap
+      else { const j = i - half - extra; p = across(along(buf + r + (half - 1 - j) * sp), r); }  // Row B, far -> near
       nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:LOOPLABEL, kind:"", loop:lp });
     });
-    const entry = rt.at(entryT);
-    const stem = roundedPath([[jn.x, jn.y], [entry.x, jn.y], [entry.x, entry.y]], 40);
-    /* path() can't wrap past `total` on its own — walk from entryT to the
-       end, then (if entryT wasn't already 0) continue from the very start
-       back up to entryT, so the loop closes on itself starting and ending
-       at the same entry point regardless of which corner it is. */
-    const stripM = d => d.replace(/^M\s*-?[\d.]+\s+-?[\d.]+\s*/, "");
-    const loopBody = entryT <= 0.01
-      ? rt.path(0, rt.total)
-      : rt.path(entryT, rt.total) + " " + stripM(rt.path(0, entryT));
-    drawBranchLine(stem + stripM(loopBody), bc, false);
   });
 
   /* ---- labels + markers: the station-code caplet doubles as the marker ---- */
