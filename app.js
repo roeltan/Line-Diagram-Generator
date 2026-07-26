@@ -27,8 +27,8 @@ const LINE_INFO = {
   CR:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
   CP:{ name:"Cross Island Line", colour:"#97c616", acr:"CRL" },
   BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
-  STC:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"SK" },
-  PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PG" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PG" },
+  STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
+  PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
   RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
@@ -56,7 +56,7 @@ const STYLE = {
   icStroke:"#33383d",
   nameSize:14, nameWeight:600, nameFill:"#1b1f24",
   codeSize:10.5, codeH:20, codeGap:14,
-  capletOutlineW:2
+  capletOutlineW:1.3
 };
 const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif';
 
@@ -930,50 +930,87 @@ function renderBranchSpacingButtons(){
     S.branchSpacing, renderBranchSpacingButtons);
 }
 
-/* The NS/EW/CC/... -> {name,colour,acr} table is user-editable at runtime:
-   rows mutate LINE_INFO in place (renaming a prefix deletes the old key),
-   and the whole table round-trips through save()/JSON export. */
+/* The NS/EW/CC/... -> {name,colour,acr} table is user-editable at runtime.
+   Prefixes belonging to the same line (e.g. EW+CG for the East-West Line,
+   or JS+JW+JE for the Jurong Region Line) are grouped under one shared
+   name/acronym/colour so editing one updates every prefix in the group at
+   once, instead of repeating identical rows per prefix. Grouping is purely
+   a rendering concern — LINE_INFO itself stays a flat prefix -> info map,
+   so it still round-trips through save()/JSON export unchanged. */
 function renderLineInfoRows(){
   const container = $("lineInfoRows");
   container.innerHTML = "";
+
+  const groups = new Map();   // name -> { name, colour, acr, prefixes:[] }
   Object.keys(LINE_INFO).sort().forEach(prefix => {
     const info = LINE_INFO[prefix];
-    const row = document.createElement("div");
-    row.className = "liRow";
+    const key = info.name || prefix;
+    if (!groups.has(key)) groups.set(key, { name:info.name, colour:info.colour, acr:info.acr, prefixes:[] });
+    groups.get(key).prefixes.push(prefix);
+  });
 
-    const prefixInp = document.createElement("input");
-    prefixInp.className = "liPrefix"; prefixInp.placeholder = "NS"; prefixInp.value = prefix;
-    prefixInp.onchange = () => {
-      const next = prefixInp.value.trim().toUpperCase();
-      if (!next || next === prefix){ prefixInp.value = prefix; return; }
-      delete LINE_INFO[prefix];
-      LINE_INFO[next] = info;
-      renderLineInfoRows();
-      render();
-    };
-    row.appendChild(prefixInp);
+  const setAll = (group, patch) => {
+    group.prefixes.forEach(p => Object.assign(LINE_INFO[p], patch));
+  };
+
+  [...groups.values()].sort((a, b) => (a.name || "").localeCompare(b.name || "")).forEach(group => {
+    const box = document.createElement("div");
+    box.className = "liGroup";
+
+    const head = document.createElement("div");
+    head.className = "liRow";
 
     const nameInp = document.createElement("input");
-    nameInp.className = "liName"; nameInp.placeholder = "Line name"; nameInp.value = info.name || "";
-    nameInp.oninput = () => { info.name = nameInp.value; render(); };
-    row.appendChild(nameInp);
+    nameInp.className = "liName"; nameInp.placeholder = "Line name"; nameInp.value = group.name || "";
+    nameInp.oninput = () => { setAll(group, { name:nameInp.value }); render(); };
+    head.appendChild(nameInp);
 
     const acrInp = document.createElement("input");
-    acrInp.className = "liAcr"; acrInp.placeholder = "NSL"; acrInp.value = info.acr || "";
-    acrInp.oninput = () => { info.acr = acrInp.value.trim(); render(); };
-    row.appendChild(acrInp);
+    acrInp.className = "liAcr"; acrInp.placeholder = "NSL"; acrInp.value = group.acr || "";
+    acrInp.oninput = () => { setAll(group, { acr:acrInp.value.trim() }); render(); };
+    head.appendChild(acrInp);
 
     const colourInp = document.createElement("input");
-    colourInp.type = "color"; colourInp.value = info.colour || "#8a9099";
-    colourInp.title = "Colour"; colourInp.oninput = () => { info.colour = colourInp.value; render(); };
-    row.appendChild(colourInp);
+    colourInp.type = "color"; colourInp.value = group.colour || "#8a9099";
+    colourInp.title = "Colour"; colourInp.oninput = () => { setAll(group, { colour:colourInp.value }); render(); };
+    head.appendChild(colourInp);
 
-    const del = document.createElement("button");
-    del.type = "button"; del.className = "rowDel"; del.textContent = "✕"; del.title = "Remove prefix";
-    del.onclick = () => { delete LINE_INFO[prefix]; renderLineInfoRows(); render(); };
-    row.appendChild(del);
+    const delGroup = document.createElement("button");
+    delGroup.type = "button"; delGroup.className = "rowDel"; delGroup.textContent = "✕";
+    delGroup.title = "Remove this line and all its prefixes";
+    delGroup.onclick = () => {
+      group.prefixes.forEach(p => delete LINE_INFO[p]);
+      renderLineInfoRows(); render();
+    };
+    head.appendChild(delGroup);
+    box.appendChild(head);
 
-    container.appendChild(row);
+    const chips = document.createElement("div");
+    chips.className = "liChips";
+    group.prefixes.forEach(prefix => {
+      const chip = document.createElement("span");
+      chip.className = "liChip";
+      chip.append(prefix);
+      const chipDel = document.createElement("button");
+      chipDel.type = "button"; chipDel.textContent = "×"; chipDel.title = "Remove prefix " + prefix;
+      chipDel.onclick = () => { delete LINE_INFO[prefix]; renderLineInfoRows(); render(); };
+      chip.appendChild(chipDel);
+      chips.appendChild(chip);
+    });
+
+    const addInp = document.createElement("input");
+    addInp.className = "liAddPrefix"; addInp.placeholder = "+ prefix";
+    addInp.onchange = () => {
+      const next = addInp.value.trim().toUpperCase();
+      addInp.value = "";
+      if (!next || LINE_INFO[next]) return;
+      LINE_INFO[next] = { name:group.name, colour:group.colour, acr:group.acr };
+      renderLineInfoRows(); render();
+    };
+    chips.appendChild(addInp);
+    box.appendChild(chips);
+
+    container.appendChild(box);
   });
 }
 
@@ -1037,39 +1074,39 @@ NS28 Marina South Pier`
   },
   ew:{
     name:"East-West Line", code:"EWL", colour:"#009645", layout:"horizontal",
-    spec:`EW1  Pasir Ris
-EW2  Tampines           > DT32*
-EW3  Simei
-EW4  Tanah Merah
-EW5  Bedok
-EW6  Kembangan
-EW7  Eunos
-EW8  Paya Lebar         > CC9
-EW9  Aljunied
-EW10 Kallang
-EW11 Lavender
-EW12 Bugis              > DT14
-EW13 City Hall          > NS25
-EW14 Raffles Place      > NS26
-EW15 Tanjong Pagar
-EW16 Outram Park        > NE3, TE17
-EW17 Tiong Bahru
-EW18 Redhill
-EW19 Queenstown
-EW20 Commonwealth
-EW21 Buona Vista        > CC22
-EW22 Dover
-EW23 Clementi
-EW24 Jurong East        > NS1
-EW25 Chinese Garden
-EW26 Lakeside
-EW27 Boon Lay
-EW28 Pioneer
-EW29 Joo Koon
-EW30 Gul Circle
-EW31 Tuas Crescent
+    spec:`EW33 Tuas Link
 EW32 Tuas West Road
-EW33 Tuas Link
+EW31 Tuas Crescent
+EW30 Gul Circle
+EW29 Joo Koon
+EW28 Pioneer
+EW27 Boon Lay
+EW26 Lakeside
+EW25 Chinese Garden
+EW24 Jurong East        > NS1
+EW23 Clementi
+EW22 Dover
+EW21 Buona Vista        > CC22
+EW20 Commonwealth
+EW19 Queenstown
+EW18 Redhill
+EW17 Tiong Bahru
+EW16 Outram Park        > NE3, TE17
+EW15 Tanjong Pagar
+EW14 Raffles Place      > NS26
+EW13 City Hall          > NS25
+EW12 Bugis              > DT14
+EW11 Lavender
+EW10 Kallang
+EW9  Aljunied
+EW8  Paya Lebar         > CC9
+EW7  Eunos
+EW6  Kembangan
+EW5  Bedok
+EW4  Tanah Merah
+EW3  Simei
+EW2  Tampines           > DT32*
+EW1  Pasir Ris
 
 [branch from EW4 down shuttle CG]
 CG1  Expo               > DT35
@@ -1293,24 +1330,24 @@ JE7  Pandan Reservoir`
        (Turf City onward) also targeted 2032. */
     name:"Cross Island Line", code:"CRL", colour:"#97c616", layout:"horizontal",
     spec:`# Under construction — Phase 1 target 2030, Punggol Extension & Phase 2 target 2032
-CR2  Aviation Park
-CR3  Loyang
-CR4  Pasir Ris East
-CR5  Pasir Ris           > EW1
-CR6  Tampines North
-CR7  Defu
-CR8  Hougang             > NE14
-CR9  Serangoon North
-CR10 Tavistock
-CR11 Ang Mo Kio          > NS16
-CR12 Teck Ghee
-CR13 Bright Hill         > TE
-CR14 Turf City
-CR15 King Albert Park    > DT6
-CR16 Maju
-CR17 Clementi            > EW23
-CR18 West Coast
 CR19 Jurong Lake District
+CR18 West Coast
+CR17 Clementi            > EW23
+CR16 Maju
+CR15 King Albert Park    > DT6
+CR14 Turf City
+CR13 Bright Hill         > TE
+CR12 Teck Ghee
+CR11 Ang Mo Kio          > NS16
+CR10 Tavistock
+CR9  Serangoon North
+CR8  Hougang             > NE14
+CR7  Defu
+CR6  Tampines North
+CR5  Pasir Ris           > EW1
+CR4  Pasir Ris East
+CR3  Loyang
+CR2  Aviation Park
 
 [branch from CR5 down shuttle CP1]
 CP2  Elias
@@ -2021,7 +2058,9 @@ document.addEventListener("click", e => {
 /* --------------------------------------------------------------------- theme */
 function applyTheme(t){
   document.documentElement.setAttribute("data-theme", t);
-  $("themeToggle").textContent = t === "dark" ? "☀️ Light" : "🌙 Dark";
+  const btn = $("themeToggle");
+  btn.textContent = t === "dark" ? "☀" : "☾";
+  btn.title = t === "dark" ? "Switch to light theme" : "Switch to dark theme";
   try { localStorage.setItem("theme", t); } catch (e){}
 }
 $("themeToggle").onclick = () => {
