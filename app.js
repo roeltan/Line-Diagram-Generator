@@ -1637,7 +1637,7 @@ TE31 Sungei Bedok       > DT37 {future}`
        balloon loop off Bukit Panjang (Service A clockwise via Senja,
        Service B anti-clockwise via Petir) that rejoins the same station
        rather than reaching a separate terminus. */
-    name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal", spacing:75,
+    name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
     spec:`BP1  Choa Chu Kang      > NS4, JS1
 BP2  South View
 BP3  Keat Hong
@@ -1657,7 +1657,7 @@ BP13 Senja`
   sklrt:{
     /* A "bowtie" shape — two balloon loops (East, West) both hanging off
        the single shared Sengkang station, with no tail at all. */
-    name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal", spacing:75,
+    name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
     spec:`STC  Sengkang            > NE16
 
 [loop at start]
@@ -1680,7 +1680,7 @@ SW8  Renjong`
   pglrt:{
     /* Another "bowtie" — East and West loops both hanging off the shared
        Punggol station, no tail. */
-    name:"Punggol LRT", code:"PTC", colour:"#718573", layout:"horizontal", spacing:75,
+    name:"Punggol LRT", code:"PTC", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
     spec:`PTC  Punggol             > NE17, BUS
 
 [loop at start]
