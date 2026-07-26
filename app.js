@@ -439,22 +439,14 @@ function buildDiagram(cfg){
     let cum = 0;
     trunk.forEach((st, i) => { positions.push(cum); cum += gapUnits[i] * stepUnit; });
 
-    /* The loop only needs to grow taller (into a rounded rect) when some
-       branch is explicitly pointed the opposite way from its junction's
-       natural outward side — i.e. it grows into the loop's interior rather
-       than away from it — so there's room for its own row without crowding
-       the loop's far edge. */
-    let needsExpand = false;
-    branches.forEach(b => {
-      if (!b.dir) return;   // no explicit direction -> always outward, unaffected
-      const idx = trunk.findIndex(st => keyOf(st) === b.from.toUpperCase());
-      if (idx < 0) return;
-      const pos = ((positions[idx] % rowTotal) + rowTotal) % rowTotal;
-      const defaultSgn = pos < rowLen ? -1 : 1;   // top row points up, bottom row points down
-      const reqSgn = b.dir === "up" ? -1 : b.dir === "down" ? 1 : defaultSgn;
-      if (reqSgn !== defaultSgn) needsExpand = true;
-    });
-    const H = needsExpand ? Math.max(baseH, 2 * branchGap) : baseH;
+    /* Branch spacing doubles as "how far apart the top and bottom halves
+       of the loop are" whenever there's at least one branch — most useful
+       for one pointed into the loop's interior (opposite its junction's
+       natural outward side), which needs the room to avoid crowding the
+       loop's far edge, but it's simplest to just let branch spacing govern
+       the loop's height any time a branch is present, rather than only in
+       that one specific case. No branches at all -> stays a plain pill. */
+    const H = branches.length ? Math.max(baseH, 2 * branchGap) : baseH;
     loop = racetrack(0, 0, W, H, r);
     /* No station sits on the semicircular end-caps, so nothing else would
        ever feed their outer extent into the bounding box — without this
