@@ -138,8 +138,12 @@
              border:1px solid var(--border);border-radius:20px;background:var(--field);
              font-size:12px;font-weight:600;color:var(--ink)}
   .presetBtn:hover{border-color:var(--accent);color:var(--ink)}
+  /* LTA Identity used sparingly — just this caplet acronym, not the rest of
+     the UI — matching the diagram's own caplet font. Falls back to the
+     system stack the same way the diagram does when the font isn't installed. */
   .presetCap{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:19px;
-             padding:0 6px;border-radius:9.5px;font-size:10px;font-weight:800;letter-spacing:.3px}
+             padding:0 6px;border-radius:9.5px;font-size:10px;font-weight:800;letter-spacing:.3px;
+             font-family:"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif}
 
   .modeToggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;flex:none}
   .modeBtn{border:0;border-radius:0;padding:4px 10px;font-size:11px;font-weight:700;text-transform:uppercase;
