@@ -52,7 +52,9 @@ CODE  Station Name  > IC1, IC2
 
 - Everything after `>` is a comma-separated list of interchange codes — each is
   auto-coloured by its line prefix (edit the `LINE_INFO` table in `app.js` to add
-  more lines/prefixes).
+  more lines/prefixes). Add the reserved code `BUS` to that list to mark a
+  nearby bus interchange — it renders as its own icon instead of a colour
+  caplet, and is toggled separately ("Show bus interchanges").
 - Use `CODE | Name` instead if the name would otherwise be ambiguous.
 - `#` starts a comment line.
 

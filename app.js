@@ -136,6 +136,14 @@ function capletPath(x, y, w, h){
          `A ${F(cw)} ${F(ry)} 0 0 1 ${F(x+cw)} ${F(y)} Z`;
 }
 
+/* Bus-interchange marker (a nearby bus interchange, not a rail one) — a
+   reserved "BUS" entry in a station's interchange-code list, drawn as
+   this icon instead of a normal colour-coded caplet. Defined once as a
+   reusable <symbol> and instantiated per station via <use>. */
+const BUS_ICON_VIEWBOX = "0 0 12.21352 12.20752";
+const BUS_ICON_BG = "M 10.85321,12.20752 H 1.36031 C 0.61525,12.20752 0,11.59827 0,10.84721 V 1.35466 C 0,0.60925 0.61525,0 1.36031,0 h 9.4929 c 0.74507,0 1.36031,0.60925 1.36031,1.35466 v 9.49255 c 0,0.75106 -0.61524,1.36031 -1.36031,1.36031";
+const BUS_ICON_GLYPH = "m 9.18888,6.78872 c 0,0.25435 -0.26635,0.66851 -3.08151,0.66851 -2.81517,0 -3.08152,-0.41416 -3.08152,-0.66851 V 3.42357 c 0,-0.14816 0.11854,-0.27234 0.26635,-0.27234 h 5.63033 c 0.14817,0 0.26635,0.12418 0.26635,0.27234 z M 8.89325,8.24358 8.81035,8.65174 c -0.012,0.0709 -0.0829,0.13017 -0.15981,0.13017 H 7.58021 c -0.0709,0 -0.13617,-0.0593 -0.13617,-0.13017 V 8.24957 c 0,-0.0769 0.0653,-0.13582 0.13617,-0.13582 h 1.2065 c 0.0769,0 0.12418,0.0589 0.10654,0.12983 M 4.77069,8.65174 c 0,0.0709 -0.0649,0.13017 -0.13582,0.13017 H 3.56419 c -0.0769,0 -0.14781,-0.0593 -0.15981,-0.13017 L 3.32188,8.24358 c -0.018,-0.0709 0.0353,-0.12983 0.10619,-0.12983 h 1.20685 c 0.0709,0 0.13582,0.0589 0.13582,0.13582 z M 3.69437,2.3469 c 0,-0.0709 0.0589,-0.13018 0.13582,-0.13018 h 4.55436 c 0.0769,0 0.13582,0.0593 0.13582,0.13018 v 0.27199 c 0,0.0713 -0.0589,0.13017 -0.13582,0.13017 H 3.83019 c -0.0769,0 -0.13582,-0.0589 -0.13582,-0.13017 z m 6.43502,1.60866 H 9.70323 c 0,-0.0413 -0.006,-0.0886 -0.006,-0.12982 L 9.62033,2.3469 C 9.60273,2.05127 9.34834,1.81455 9.05236,1.81455 H 3.16167 c -0.29562,0 -0.54998,0.23672 -0.56797,0.53235 L 2.5172,3.82574 c 0,0.0413 0,0.0885 -0.006,0.12982 H 2.0854 c -0.14217,0 -0.26635,0.12453 -0.26635,0.27199 v 0.80469 c 0,0.0769 0.018,0.19509 0.0356,0.26599 l 0.0649,0.272 c 0.0176,0.0713 0.0945,0.13017 0.16581,0.13017 h 0.40217 v 3.35351 c 0,0.29598 0.24235,0.53234 0.53798,0.53234 h 0.13617 v 0.67416 c 0,0.0713 0.0593,0.13017 0.13018,0.13017 h 0.80433 c 0.0769,0 0.13582,-0.0589 0.13582,-0.13017 V 9.58625 h 3.75003 v 0.67416 c 0,0.0713 0.0589,0.13017 0.13018,0.13017 h 0.80997 c 0.0713,0 0.13018,-0.0589 0.13018,-0.13017 V 9.58625 h 0.13617 c 0.29563,0 0.53834,-0.23636 0.53834,-0.53234 V 5.7004 h 0.40217 c 0.0709,0 0.14781,-0.0589 0.16545,-0.13017 l 0.0649,-0.272 C 10.3774,5.22733 10.395,5.10915 10.395,5.03224 V 4.22755 c 0,-0.14746 -0.12418,-0.27199 -0.26599,-0.27199";
+
 /* ------------------------------------------------------------------ parsing */
 /* Current/Future/Proposed roadmap tiers. A station or branch with no tag is
    "current" (always shown); {future}/{proposed} mark it as only appearing
@@ -433,6 +441,9 @@ function buildDiagram(cfg){
   const bgColour = cfg.dark ? "#15181c" : "#ffffff";
   const svg = el("svg", { xmlns:SVGNS, version:"1.1" });
   const defs     = el("defs", null, svg);
+  const busIconSymbol = el("symbol", { id:"busIcon", viewBox:BUS_ICON_VIEWBOX }, defs);
+  el("path", { d:BUS_ICON_BG, fill:"#93c83d" }, busIconSymbol);
+  el("path", { d:BUS_ICON_GLYPH, fill:"#373a37" }, busIconSymbol);
   const gLines   = el("g", { fill:"none", "stroke-linecap":"round", "stroke-linejoin":"round" }, svg);
   const gLabels  = el("g", { "font-family":FONT }, svg);
   const gMarkers = el("g", null, svg);
@@ -697,7 +708,9 @@ function buildDiagram(cfg){
     const L = n.label;
     const codes = [];
     if (cfg.showCodes && n.code) codes.push({ t:n.code, c:n.colour });
+    const hasBus = n.ics.some(c => /^bus$/i.test(c));
     if (cfg.showIc) n.ics.forEach(c => {
+      if (/^bus$/i.test(c)) return;           // a nearby bus interchange, drawn separately as an icon
       const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
       const t = osi ? c.slice(0, -1) : c;
       codes.push({ t, c:colourForCode(t, n.colour), osi });
@@ -707,6 +720,7 @@ function buildDiagram(cfg){
     const horiz = Math.abs(dir[0]) > Math.abs(dir[1]);
     const h = STYLE.codeH;
     let codesExtent = 0;
+    let farEdge = null;   // coordinate just past the last code, along dir's axis — where the bus icon (if any) continues from
 
     const OSI_GAP = 12;   // gap that stands an out-of-station code apart, bridged by a connector line
 
@@ -761,6 +775,7 @@ function buildDiagram(cfg){
                           aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
       }
       codesExtent = w0 / 2;   // name sits opposite the ICs, only needs to clear the own-code segment
+      farEdge = edge;
 
     } else if (codes.length){
       /* Horizontal/loop layout: each code gets its own separate pill-shaped
@@ -790,6 +805,28 @@ function buildDiagram(cfg){
         bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
       });
       codesExtent = Math.abs(edge - n.y);
+      farEdge = edge;
+    }
+
+    /* bus interchange icon — a reserved "BUS" entry in the interchange
+       list, continuing past the last code in the same direction the
+       codes themselves stack (or straight off the station if there are
+       none to show). */
+    if (cfg.showBus && hasBus){
+      const busSize = h, gap = 4;
+      if (horiz){
+        const growDir = -dir[0];
+        const edgeX = farEdge !== null ? farEdge : n.x;
+        const ix = (growDir >= 0 ? edgeX + gap : edgeX - gap - busSize);
+        el("use", { href:"#busIcon", x:F2(ix), y:F2(n.y - busSize/2), width:F2(busSize), height:F2(busSize) }, gLabels);
+        bb.rect(ix, n.y - busSize/2, busSize, busSize);
+      } else {
+        const edgeY = farEdge !== null ? farEdge : n.y;
+        const iy = (dir[1] >= 0 ? edgeY + gap : edgeY - gap - busSize);
+        el("use", { href:"#busIcon", x:F2(n.x - busSize/2), y:F2(iy), width:F2(busSize), height:F2(busSize) }, gLabels);
+        bb.rect(n.x - busSize/2, iy, busSize, busSize);
+        codesExtent += busSize + gap;   // keep the inline name clear of the icon too
+      }
     }
 
     /* station name */
@@ -871,6 +908,7 @@ function buildDiagram(cfg){
      no need to guess it via the LINE_INFO prefix table */
   if (cfg.name || cfg.code) pushLegend(cfg.name || cfg.code, colour, cfg.code || cfg.name);
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(code => {
+    if (/^bus$/i.test(code)) return;                           // a nearby bus interchange, not a rail line
     if (n.shuttleIcs && n.shuttleIcs.includes(code)) return;   // shuttle spur of this same line, not a separate interchange
     const m = /^([A-Za-z]+)/.exec(code || "");
     const prefix = m ? m[1].toUpperCase() : (code || "").toUpperCase();
@@ -983,7 +1021,7 @@ const $ = id => document.getElementById(id);
 const S = {
   spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
   hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"), branchSpacing:$("branchSpacing"),
-  closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"),
+  closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"),
   showBadge:$("showBadge"), showLegend:$("showLegend"), showAccent:$("showAccent"), opaque:$("opaque")
 };
 let zoom = 1, current = null;
@@ -1647,6 +1685,7 @@ function readForm(){
     spacing:parseInt(S.spacing.value, 10) || 100,
     branchSpacing:parseInt(S.branchSpacing.value, 10) || 120,
     closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
+    showBus:S.showBus.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked,
     dark: diagramDark,
@@ -1665,6 +1704,7 @@ function applyConfig(c){
   S.closed.checked = c.closed !== false;
   S.showCodes.checked = c.showCodes !== false;
   S.showIc.checked = c.showIc !== false;
+  S.showBus.checked = c.showBus !== false;
   S.showBadge.checked = c.showBadge !== false;
   S.showLegend.checked = c.showLegend !== false;
   S.showAccent.checked = c.showAccent !== false;
@@ -2093,7 +2133,7 @@ function snapshotConfig(){
   return {
     name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
     spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
-    showCodes:S.showCodes.checked, showIc:S.showIc.checked,
+    showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
     lineInfo:LINE_INFO
@@ -2175,7 +2215,7 @@ SWATCHES.forEach(c => {
 });
 
 ["input", "change"].forEach(ev => {
-  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
+  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBus, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
     .forEach(n => n.addEventListener(ev, render));
 });
 S.spacing.addEventListener("input", () => { $("spacingVal").textContent = S.spacing.value; render(); });
