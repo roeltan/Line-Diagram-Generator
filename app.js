@@ -252,6 +252,9 @@ function parseSpec(text){
         const t = tokens[ti].toLowerCase();
         if (DIRS_UD.includes(t)) dirUD = t;
         else if (DIRS_LR.includes(t)) dirLR = t;
+        else if (t === "loop"){
+          mode = "loop";
+        }
         else if (t === "shuttle"){
           mode = "shuttle";
           const next = tokens[ti + 1];
@@ -624,6 +627,68 @@ function buildDiagram(cfg){
         jn.ics = [...jn.ics, label];
         jn.shuttleIcs = [...(jn.shuttleIcs || []), label];
       }
+    }
+
+    /* "balloon" branch — a spur that curves out from the junction, loops
+       all the way around through its own stations, and rejoins the same
+       junction instead of dead-ending (e.g. the Bukit Panjang LRT loop off
+       Bukit Panjang, or one of Sengkang LRT's East/West loops off Sengkang).
+       Reuses the same racetrack geometry the whole-diagram loop layout
+       uses, just sized to this branch's own station count. Stations sit
+       on whichever long edge of the racetrack ends up farther from the
+       trunk; the near edge (plus both short ends) is bare return track,
+       and the stem connecting the junction to the racetrack is drawn once —
+       it's the same physical track walked in both directions, so drawing
+       it once already reads correctly. */
+    if (b.mode === "loop"){
+      const count = b.stations.length;
+      const r = Math.min(32, Math.max(20, sp * 0.4));
+      const rowLen = Math.max((count - 1) * sp, 1);
+      const loopW = rowLen + 2 * r, loopH = 2 * r;   // loopH === 2r on purpose: a stadium/pill with no straight sides
+      const sgn = b.dir === "up" ? -1 : 1;          // which side of the trunk it bulges to
+      const growSgn = b.grow === "left" ? -1 : 1;   // which way it extends from the junction
+      const x0 = growSgn > 0 ? jn.x : jn.x - loopW;
+      const x1 = x0 + loopW;
+      const y0 = sgn < 0 ? jn.y - gap - loopH : jn.y + gap;
+      const y1 = y0 + loopH;
+      const rt = racetrack(x0, y0, x1, y1, r);
+      const onTopRow = sgn < 0;   // far-from-trunk row: top (y0) if bulging up, bottom (y1) if bulging down
+
+      /* Exact perimeter (`t`) values for the racetrack's 4 corners, per the
+         segment order racetrack() builds internally (top row, corner, right
+         side, corner, bottom row [right-to-left], corner, left side,
+         corner). Computed directly rather than via atStraight()/at()'s own
+         boundary handling, which is ambiguous exactly at a row's endpoints. */
+      const cornerLen = r * Math.PI / 2;
+      const tTopRight = rowLen, tBottomRight = rowLen + 2 * cornerLen, tBottomLeft = 2 * rowLen + 2 * cornerLen;
+
+      let entryT, startT, stepSign;
+      if (onTopRow){
+        // stations run along the top row (t=0 at its left end, t=rowLen at its right)
+        if (growSgn > 0){ entryT = tBottomLeft; startT = 0; stepSign = 1; }
+        else            { entryT = tBottomRight; startT = tTopRight; stepSign = -1; }
+      } else {
+        // stations run along the bottom row (t=tBottomRight at its right end, t=tBottomLeft at its left)
+        if (growSgn > 0){ entryT = 0; startT = tBottomLeft; stepSign = -1; }
+        else            { entryT = tTopRight; startT = tBottomRight; stepSign = 1; }
+      }
+      b.stations.forEach((st, i) => {
+        const p = rt.at(startT + stepSign * i * sp);
+        nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:LOOPLABEL,
+                     kind:"", branch:b });
+      });
+      const entry = rt.at(entryT);
+      const stem = roundedPath([[jn.x, jn.y], [entry.x, jn.y], [entry.x, entry.y]], 40);
+      /* path() can't wrap past `total` on its own — walk from entryT to the
+         end, then (if entryT wasn't already 0) continue from the very start
+         back up to entryT, so the loop closes on itself starting and
+         ending at the same entry point regardless of which corner it is. */
+      const stripM = d => d.replace(/^M\s*-?[\d.]+\s+-?[\d.]+\s*/, "");
+      const loopBody = entryT <= 0.01
+        ? rt.path(0, rt.total)
+        : rt.path(entryT, rt.total) + " " + stripM(rt.path(0, entryT));
+      drawBranchLine(stem + stripM(loopBody), bc, shuttle);
+      return;
     }
 
     if (cfg.layout === "loop"){
@@ -1216,6 +1281,8 @@ const PRESET_GROUPS = [
     { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa", tier:"current" },
     { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4", tier:"current" },
     { key:"te", acr:"TEL", label:"Thomson-East Coast Line", colour:"#9d5b25", tier:"current" },
+    { key:"bplrt", acr:"BP", label:"Bukit Panjang LRT", colour:"#718573", tier:"current" },
+    { key:"sklrt", acr:"STC", label:"Sengkang LRT", colour:"#718573", tier:"current" },
   ]},
   { name:"Future", items:[
     { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa", tier:"future" },
@@ -1492,6 +1559,51 @@ TE29 Bayshore
 # Bedok South and Sungei Bedok are under testing, due 2H 2026
 TE30 Bedok South        > BUS {future}
 TE31 Sungei Bedok       > DT37 {future}`
+  },
+  bplrt:{
+    /* A "lollipop" shape — a straight tail from Choa Chu Kang, then a
+       balloon loop off Bukit Panjang (Service A clockwise via Senja,
+       Service B anti-clockwise via Petir) that rejoins the same station
+       rather than reaching a separate terminus. */
+    name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal",
+    spec:`BP1  Choa Chu Kang      > NS4, JS1
+BP2  South View
+BP3  Keat Hong
+BP4  Teck Whye
+BP5  Phoenix
+BP6  Bukit Panjang       > DT1, BT9
+
+[branch from BP6 down right loop]
+BP7  Petir
+BP8  Pending
+BP9  Bangkit
+BP10 Fajar
+BP11 Segar
+BP12 Jelapang
+BP13 Senja`
+  },
+  sklrt:{
+    /* A "bowtie" shape — two balloon loops (East, West) both hanging off
+       the single shared Sengkang station, with no tail at all. */
+    name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal",
+    spec:`STC  Sengkang            > NE16
+
+[branch from STC up right loop]
+SE1  Compassvale
+SE2  Rumbia
+SE3  Bakau
+SE4  Kangkar
+SE5  Ranggung
+
+[branch from STC down right loop]
+SW1  Cheng Lim
+SW2  Farmway
+SW3  Kupang
+SW4  Thanggam
+SW5  Fernvale
+SW6  Layar
+SW7  Tongkang
+SW8  Renjong`
   },
   stl:{
     /* SPECULATIVE — not an official LTA project. Transcribed from a fan
@@ -1845,6 +1957,7 @@ function branchHeaderText(b){
   if (b.dir) s += ` ${b.dir}`;
   if (b.grow && b.grow !== b.dir) s += ` ${b.grow}`;
   if (b.mode === "shuttle") s += ` shuttle${b.shuttleLabel ? " " + b.shuttleLabel : ""}`;
+  if (b.mode === "loop") s += " loop";
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.colour) s += `: ${b.colour}`;
   s += "]";

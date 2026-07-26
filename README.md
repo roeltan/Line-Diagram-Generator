@@ -81,6 +81,24 @@ the end of the header to override the branch's colour.
 **Branch spacing**, next to station spacing in the Layout section, controls
 how far a branch's line sits from the trunk it splits off from.
 
+Add `loop` to a branch header for a **balloon loop** — a spur that curves out
+from the junction, runs through its own stations, and rejoins that *same*
+junction instead of dead-ending, for lines that reverse via a loop rather
+than a plain terminus (Bukit Panjang LRT's loop off Bukit Panjang, or one of
+Sengkang LRT's East/West loops off Sengkang — see those two presets for
+worked examples). Works on both horizontal and vertical layouts:
+
+```
+[branch from BP6 down right loop]
+BP7  Petir
+BP8  Pending
+```
+
+`up`/`down` still picks which side of the trunk it bulges toward, and
+`left`/`right` which way it extends from the junction. Two loop branches off
+the *same* junction (no separate tail) gives a bowtie/figure-8 shape, like
+Sengkang LRT.
+
 The **Editor** view (default) gives you a row-based UI for all of this — add/
 reorder/delete stations and branches without touching text. The **⇅** button
 next to the Editor/Text toggle reverses the trunk's station order in place
