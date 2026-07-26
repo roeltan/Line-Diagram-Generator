@@ -794,7 +794,15 @@ function buildDiagram(cfg){
     if (!jn) return;
     const bc = lp.colour || colour;
 
-    const r = Math.max(sp, 100);   // the loop's own "thickness" — matches the whole-diagram Loop shape's own radius formula (max(sp,100)) exactly, so it scales consistently across orientations instead of inheriting branch spacing's own very different horizontal/vertical defaults
+    /* The loop's own "thickness" starts from the same baseline as the
+       whole-diagram Loop shape (max(sp,100)), so it's consistent across
+       orientations by default — then scales with however far the branch
+       spacing slider sits from ITS OWN default for this orientation, so
+       branch spacing still visibly resizes it without reintroducing the
+       disproportion between horizontal (default 120) and vertical
+       (default 240) that using branchGap directly caused. */
+    const branchGapRatio = branchGap / (BRANCH_SPACING_DEFAULT[cfg.layout] || 120);
+    const r = Math.max(sp, 100) * branchGapRatio;
     const buf = Math.max(20, r * 0.35);    // a short straight run past jn before the fork starts curving
     const rowBuf = buf;                    // the same, mirrored — a short straight run after each row's own curve before its first station
     const curveRun = sp * 2;               // how far (along the axis) the smooth S-curve fork takes to reach full perpendicular offset — two station pitches, so it has room to breathe
