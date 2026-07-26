@@ -106,6 +106,17 @@ a horizontal trunk (shuttle mode and the orthogonal curve option aren't
 available for a bridge branch either) — elsewhere it falls back to a
 normal dead-end branch with a warning.
 
+### Loop shape
+
+Setting **Shape** to Loop draws the *entire* trunk as a single closed
+racetrack (e.g. Circle Line) instead of a straight line — untick "Closed
+loop" to leave it open-ended instead (a plain arc). The **Orientation**
+row still applies here too: Horizontal reads stations across the top and
+bottom of the racetrack (the classic Circle Line shape), Vertical reads
+them down the right side and back up the left instead, for a tall loop.
+**Rotate loop** (↺/↻) cycles which station the racetrack starts drawing
+from, independent of orientation.
+
 ### Trunk end-loops
 
 A **balloon loop** is part of the trunk's own shape, not a branch — it's for

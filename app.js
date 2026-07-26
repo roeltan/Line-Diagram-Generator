@@ -415,9 +415,9 @@ function drawOsiConnector(el, parent, x0, y0, x1, y1, thickness, colourA, colour
    (`atStraight`) so stations only ever land on those two rows — never the
    curved caps, and never the vertical sides even once those have length
    (they're reserved for branches that grow into the loop). */
-function racetrack(x0, y0, x1, y1, r){
+function racetrack(x0, y0, x1, y1, r, vertical){
   const segs = [];
-  const lineSegs = [];   // top + bottom only — the station-eligible rows
+  const lineSegs = [];   // the station-eligible rows (top/bottom, or left/right when vertical)
   let tCursor = 0;
   const line = (ax, ay, bx, by, nx, ny, isRow) => {
     const len = Math.hypot(bx-ax, by-ay);
@@ -433,13 +433,16 @@ function racetrack(x0, y0, x1, y1, r){
   };
   const D = Math.PI / 180;
 
-  line(x0+r, y0, x1-r, y0,  0, -1, true);    // top row
+  /* Same rounded-rect perimeter either way — only which pair of straight
+     sides counts as "row" (station-eligible) flips: top/bottom normally,
+     left/right when the loop's own major axis runs vertically instead. */
+  line(x0+r, y0, x1-r, y0,  0, -1, !vertical);   // top
   arc (x1-r, y0+r, -90*D, 0);
-  line(x1, y0+r, x1, y1-r,  1,  0, false);   // right side — no stations
+  line(x1, y0+r, x1, y1-r,  1,  0, vertical);    // right
   arc (x1-r, y1-r, 0, 90*D);
-  line(x1-r, y1, x0+r, y1,  0,  1, true);    // bottom row
+  line(x1-r, y1, x0+r, y1,  0,  1, !vertical);   // bottom
   arc (x0+r, y1-r, 90*D, 180*D);
-  line(x0, y1-r, x0, y0+r, -1,  0, false);   // left side — no stations
+  line(x0, y1-r, x0, y0+r, -1,  0, vertical);    // left
   arc (x0+r, y0+r, 180*D, 270*D);
 
   const total = tCursor;
@@ -582,24 +585,27 @@ function buildDiagram(cfg){
        before H is finalised. */
     const baseH = Math.max(sp * 2, 200);
     const r = baseH / 2;
-    const W = (totalUnits * sp) / 2 + baseH;
+    /* "long" is the station-bearing axis (the loop's own reading direction),
+       "short" is the other one — branch spacing governs it whenever a
+       branch needs room to grow into the loop's interior. Which physical
+       axis (x or y) each one becomes depends on loopVertical: a loop can
+       run its long axis horizontally (the classic Circle Line shape) or
+       vertically (stations down one side, up the other) — same geometry,
+       just swapped. */
+    const long = (totalUnits * sp) / 2 + baseH;
+    const short = branches.length ? Math.max(baseH, 2 * branchGap) : baseH;
+    const vertical = !!cfg.loopVertical;
+    const W = vertical ? short : long;
+    const H = vertical ? long : short;
     loopW = W;
-    const rowLen = W - 2 * r;             // top row length == bottom row length
+    const rowLen = long - 2 * r;           // station row length (both rows are equal)
     const rowTotal = rowLen * 2;
     const stepUnit = rowTotal / totalUnits;
     const positions = [];
     let cum = 0;
     trunk.forEach((st, i) => { positions.push(cum); cum += gapUnits[i] * stepUnit; });
 
-    /* Branch spacing doubles as "how far apart the top and bottom halves
-       of the loop are" whenever there's at least one branch — most useful
-       for one pointed into the loop's interior (opposite its junction's
-       natural outward side), which needs the room to avoid crowding the
-       loop's far edge, but it's simplest to just let branch spacing govern
-       the loop's height any time a branch is present, rather than only in
-       that one specific case. No branches at all -> stays a plain pill. */
-    const H = branches.length ? Math.max(baseH, 2 * branchGap) : baseH;
-    loop = racetrack(0, 0, W, H, r);
+    loop = racetrack(0, 0, W, H, r, vertical);
     /* No station sits on the semicircular end-caps, so nothing else would
        ever feed their outer extent into the bounding box — without this
        they get clipped out of the viewBox. */
@@ -609,7 +615,7 @@ function buildDiagram(cfg){
       const p = loop.atStraight(positions[i]);
       nodes.push({ ...st, x:p.x, y:p.y, nx:p.nx, ny:p.ny, colour,
                    kind: cfg.closed ? "" : (i === 0 || i === trunk.length-1 ? "term" : ""),
-                   label: LOOPLABEL });
+                   label: vertical ? (p.nx > 0 ? LOOP_RIGHT : LOOP_LEFT) : LOOPLABEL });
     });
     trunkPath = cfg.closed
       ? loop.path(0, loop.total)
@@ -1270,7 +1276,7 @@ const $ = id => document.getElementById(id);
 const S = {
   spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
   hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"), branchSpacing:$("branchSpacing"),
-  closed:$("closed"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"), showSir:$("showSir"),
+  closed:$("closed"), loopVertical:$("loopVertical"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"), showSir:$("showSir"),
   showBadge:$("showBadge"), showLegend:$("showLegend"), showAccent:$("showAccent"), opaque:$("opaque")
 };
 let zoom = 1, current = null;
@@ -2171,7 +2177,7 @@ function readForm(){
     colour:S.colour.value, layout:S.layout.value,
     spacing:parseInt(S.spacing.value, 10) || 100,
     branchSpacing:parseInt(S.branchSpacing.value, 10) || 120,
-    closed:S.closed.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
+    closed:S.closed.checked, loopVertical:S.loopVertical.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
     showBus:S.showBus.checked, showSir:S.showSir.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked,
@@ -2188,6 +2194,7 @@ function applyConfig(c){
   S.layout.value = c.layout || "horizontal";
   spacingByLayout = {};   // a freshly-loaded preset starts with a clean slate — no stale spacing cached from whatever was loaded before
   if (S.layout.value === "horizontal" || S.layout.value === "vertical") lastOrientation = S.layout.value;
+  S.loopVertical.checked = c.loopVertical === true;
   syncLayoutButtons();
   S.spacing.value = c.spacing || SPACING_DEFAULT[S.layout.value] || 100;
   S.branchSpacing.value = c.branchSpacing || BRANCH_SPACING_DEFAULT[S.layout.value] || 120;
@@ -2227,7 +2234,6 @@ function syncVisibility(){
   const l = S.layout.value;
   $("closedField").style.display = l === "loop"  ? "" : "none";
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
-  $("orientationField").style.display = l === "loop" ? "none" : "";
   $("loopsContainer").style.display = l === "loop" ? "none" : "";
   $("addLoopBtn").style.display = l === "loop" ? "none" : "";
   syncSpacingSlider();
@@ -2730,7 +2736,7 @@ const KEY = "lineDiagramGenerator.v1";
 function snapshotConfig(){
   return {
     name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
-    spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked,
+    spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked, loopVertical:S.loopVertical.checked,
     showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked, showSir:S.showSir.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
@@ -2843,8 +2849,13 @@ function syncLayoutButtons(){
   document.querySelectorAll("#shapeRow .spacingBtn").forEach(b => {
     b.classList.toggle("active", b.dataset.value === (isLoop ? "loop" : "straight"));
   });
+  /* Orientation means something different depending on shape: for a
+     straight trunk it's S.layout.value itself; for a loop it's the
+     racetrack's own major axis (S.loopVertical), a fully independent flag
+     since a loop is always "loop" as far as S.layout.value is concerned. */
+  const curOrientation = isLoop ? (S.loopVertical.checked ? "vertical" : "horizontal") : S.layout.value;
   document.querySelectorAll("#orientationRow .spacingBtn").forEach(b => {
-    b.classList.toggle("active", b.dataset.value === (isLoop ? lastOrientation : S.layout.value));
+    b.classList.toggle("active", b.dataset.value === curOrientation);
   });
 }
 function setLayout(v){
@@ -2863,7 +2874,15 @@ document.querySelectorAll("#shapeRow .spacingBtn").forEach(b => {
   b.onclick = () => setLayout(b.dataset.value === "loop" ? "loop" : lastOrientation);
 });
 document.querySelectorAll("#orientationRow .spacingBtn").forEach(b => {
-  b.onclick = () => setLayout(b.dataset.value);
+  b.onclick = () => {
+    if (S.layout.value === "loop"){
+      S.loopVertical.checked = b.dataset.value === "vertical";
+      syncLayoutButtons();
+      render(); fit();
+    } else {
+      setLayout(b.dataset.value);
+    }
+  };
 });
 
 $("addStationBtn").onclick = () => {
