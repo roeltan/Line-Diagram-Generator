@@ -912,7 +912,7 @@ function buildDiagram(cfg){
     let x = bx;
     if (cfg.code){
       const w = Math.max(42, cfg.code.length * 12 + 20);
-      el("rect", { x:bx, y:by, width:w, height:36, rx:18, fill:colour }, g);
+      el("path", { d:capletPath(bx, by, w, 36), fill:colour }, g);
       const t = el("text", { x:bx + w/2, y:by + 24.5, "text-anchor":"middle",
                              "font-size":17, "font-weight":800, fill:contrastText(colour),
                              "letter-spacing":".5" }, g);
