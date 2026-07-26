@@ -1330,6 +1330,7 @@ ST27 Woodlands North     > TE1, RTS*`
        while JE (Tengah/Jurong East spur) branches off Tengah (JS3) —
        a real two-branch example, each off a different junction. */
     name:"Jurong Region Line", code:"JRL", colour:"#0099aa", layout:"horizontal",
+    spacing:80, branchSpacing:150,
     spec:`# Under construction — JS/JW mid-2028, JE 2028, JS9-12/JW3-5 2029
 JS1  Choa Chu Kang       > NS4, BP1
 JS2  Choa Chu Kang West
