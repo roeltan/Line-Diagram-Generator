@@ -95,16 +95,20 @@ to and rejoins — no station code needed, since a trunk only has two ends:
 BP5  Phoenix
 BP6  Bukit Panjang
 
-[loop at end down right]
+[loop at end]
 BP7  Petir
 BP8  Pending
 ```
 
-`up`/`down` picks which side of the trunk it bulges toward, and `left`/`right`
-which way it extends from the anchor end. Works on both horizontal and
-vertical layouts. Two `[loop at end]` sections (or two `[loop at start]`)
-gives a bowtie/figure-8 off that single end, like Sengkang LRT; one
-`[loop at start]` and one `[loop at end]` gives a dumbbell shape instead.
+Which way it extends is always automatic — it continues the trunk's own
+reading direction when it has one (2+ trunk stations), or follows the
+diagram's overall orientation for a single-station trunk with no direction
+of its own (Sengkang). Works on both horizontal and vertical layouts. Two
+`[loop at end]` sections (or two `[loop at start]`) gives a bowtie/figure-8
+off that single end, like Sengkang LRT; one `[loop at start]` and one
+`[loop at end]` gives a dumbbell shape instead. Not available when the
+line's own Shape is set to Loop — a closed loop trunk has no "start"/"end"
+for a balloon loop to hang off.
 
 The **Editor** view (default) gives you a row-based UI for all of this — add/
 reorder/delete stations and branches without touching text. The **⇅** button

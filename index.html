@@ -81,13 +81,19 @@
     <div class="sect">Layout</div>
     <div class="field">
       <label>Shape</label>
-      <div class="spacingRow" id="layoutRow">
-        <button type="button" class="spacingBtn" data-value="horizontal">Horizontal</button>
-        <button type="button" class="spacingBtn" data-value="vertical">Vertical</button>
+      <div class="spacingRow" id="shapeRow">
+        <button type="button" class="spacingBtn" data-value="straight">Straight</button>
         <button type="button" class="spacingBtn" data-value="loop">Loop</button>
       </div>
-      <input type="hidden" id="layout" value="horizontal">
     </div>
+    <div class="field" id="orientationField">
+      <label>Orientation</label>
+      <div class="spacingRow" id="orientationRow">
+        <button type="button" class="spacingBtn" data-value="horizontal">Horizontal</button>
+        <button type="button" class="spacingBtn" data-value="vertical">Vertical</button>
+      </div>
+    </div>
+    <input type="hidden" id="layout" value="horizontal">
     <div class="field">
       <label class="fieldRow">Station spacing <span id="spacingVal" class="fieldVal"></span></label>
       <input type="range" class="slider" id="spacing" step="5" min="25" max="160">
@@ -138,6 +144,8 @@
       <button type="button" class="addBtn" id="addStationBtn">+ Add station</button>
       <div id="branchesContainer"></div>
       <button type="button" class="addBtn" id="addBranchBtn">+ Add branch</button>
+      <div id="loopsContainer"></div>
+      <button type="button" class="addBtn" id="addLoopBtn">+ Add balloon loop</button>
     </div>
 
     <div id="textView" style="display:none">

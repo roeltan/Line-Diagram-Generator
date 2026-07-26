@@ -238,17 +238,12 @@ function parseSpec(text){
         const colonIdx = rest.indexOf(":");
         if (colonIdx >= 0){
           let tail = rest.slice(colonIdx + 1).trim();
-          rest = rest.slice(0, colonIdx).trim();
           const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(tail);
           if (cm) colour = cm[1];
         }
-        let dirUD = "", dirLR = "";
-        rest.split(/\s+/).filter(Boolean).forEach(tok => {
-          tok = tok.toLowerCase();
-          if (tok === "up" || tok === "down") dirUD = tok;
-          else if (tok === "left" || tok === "right") dirLR = tok;
-        });
-        const lp = { at, dir:dirUD, grow:dirLR, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
+        // which way it extends is always automatic (continues the trunk's own
+        // reading direction, or the diagram's orientation) — no dir override
+        const lp = { at, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
         loops.push(lp);
         cursor = lp.stations;
         return;
@@ -256,7 +251,7 @@ function parseSpec(text){
 
       const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(sTagStripped);
       if (!m){
-        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code> or <code>[loop at start/end up/down left/right]</code>`);
+        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code> or <code>[loop at start/end]</code>`);
         return;
       }
       const from = m[1];
@@ -522,6 +517,7 @@ function buildDiagram(cfg){
 
   /* ---- resolve nodes: trunk positions per layout, then branches ---- */
   const nodes = [];   // {code,name,ics,x,y,kind,label}
+  const extentPts = [];   // extra points (e.g. a loop's own far cap) with no station of their own, but that still bound the drawn line — folded into the left/right balancing below
   const sp = cfg.spacing;
   const branchGap = cfg.branchSpacing || BRANCH_SPACING_DEFAULT[cfg.layout] || 120;
 
@@ -538,6 +534,15 @@ function buildDiagram(cfg){
      side of the loop they sit on — name position is a fixed clearance
      above the caplet stack rather than growing with it. */
   const LOOPLABEL = { nameRot:0, nameAnchor:"middle", nameDX:0, nameDY:-(STYLE.codeH/2 + 12), codeDir:[0,1] };
+  /* Balloon-loop stations sitting in a vertical column (a loop whose axis
+     runs up/down, e.g. one of Sengkang's own loops turned sideways, or any
+     loop on a vertical-orientation diagram) can't use LOOPLABEL — "above"
+     collides with whichever neighbour sits directly above it in the same
+     column. Name reads to the side instead, same as a normal vertical
+     branch, but keeps the loop's own vertical code-stacking (codeDir 0,1)
+     rather than switching to the horizontal merged-pill style. */
+  const LOOP_LEFT  = { nameRot:0, nameAnchor:"end",   nameDX:-(STYLE.codeH/2 + 14), nameDY:4, codeDir:[0,1] };
+  const LOOP_RIGHT = { nameRot:0, nameAnchor:"start", nameDX: (STYLE.codeH/2 + 14), nameDY:4, codeDir:[0,1] };
 
   let trunkPath = "";            // path 'd' for the trunk
   let loop = null;               // stadium geometry, when layout === 'loop'
@@ -782,33 +787,37 @@ function buildDiagram(cfg){
      as possible across the two rows only — never a station at the far
      cap's own apex, which stays a plain curve. */
   (loops || []).forEach(lp => {
+    if (cfg.layout === "loop") return;   // a closed loop trunk has no real "start"/"end" for a balloon loop to hang off — doesn't make sense here
     const count = lp.stations.length;
     if (!count) return;
     const jn = lp.at === "start" ? nodes[0] : nodes[trunkCount - 1];
     if (!jn) return;
     const bc = lp.colour || colour;
 
-    const r = Math.max(56, sp * 0.9);
+    const r = Math.max(sp, 100);   // the loop's own "thickness" — matches the whole-diagram Loop shape's own radius formula (max(sp,100)) exactly, so it scales consistently across orientations instead of inheriting branch spacing's own very different horizontal/vertical defaults
     const buf = Math.max(20, r * 0.35);    // a short straight run past jn before the fork starts curving
     const rowBuf = buf;                    // the same, mirrored — a short straight run after each row's own curve before its first station
+    const curveRun = sp * 2;               // how far (along the axis) the smooth S-curve fork takes to reach full perpendicular offset — two station pitches, so it has room to breathe
     const rowACount = Math.ceil(count / 2), rowBCount = count - rowACount;   // split evenly across the two rows only — no station at the far cap
-    const rowLen = Math.max(Math.max(rowACount, rowBCount) * sp + rowBuf, 1);
-    const loopW = buf + rowLen + 2 * r;
+    const maxRowCount = Math.max(rowACount, rowBCount);
+    // the longer row's last station sits rowBuf short of the far cap too — the same small buffer as its first station, for a consistent gap on both ends of the row (a shorter row just ends up with more bare curve before the far cap)
+    const rowLen = Math.max(rowBuf + (maxRowCount - 1) * sp + rowBuf, 1);
+    const loopW = buf + curveRun + rowLen + r;
 
-    /* Which way the loop extends: auto-continue the trunk's own reading
-       direction when it has one (2+ trunk stations); otherwise (a single-
-       station trunk, e.g. Sengkang, which has no direction of its own)
-       fall back to the explicit up/down/left/right token. */
+    /* Which way the loop extends — always automatic, never a user override:
+       continue the trunk's own reading direction when it has one (2+ trunk
+       stations); otherwise (a single-station trunk, e.g. Sengkang, which
+       has no direction of its own) follow the overall diagram orientation. */
     const neighbour = lp.at === "start" ? nodes[1] : nodes[trunkCount - 2];
     let axisHoriz, axisSgn;
     if (neighbour && (neighbour.x !== jn.x || neighbour.y !== jn.y)){
       const dx = jn.x - neighbour.x, dy = jn.y - neighbour.y;
       axisHoriz = Math.abs(dx) >= Math.abs(dy);
       axisSgn = axisHoriz ? (dx >= 0 ? 1 : -1) : (dy >= 0 ? 1 : -1);
-    } else if (lp.dir === "up"){ axisHoriz = false; axisSgn = -1; }
-    else if (lp.dir === "down"){ axisHoriz = false; axisSgn = 1; }
-    else if (lp.dir === "left"){ axisHoriz = true; axisSgn = -1; }
-    else { axisHoriz = true; axisSgn = 1; }
+    } else {
+      axisHoriz = cfg.layout !== "vertical";
+      axisSgn = lp.at === "start" ? -1 : 1;
+    }
 
     /* Row A sits on the "before" side (top, if horizontal; left, if
        vertical) and Row B on the "after" side, purely by convention — real
@@ -817,33 +826,41 @@ function buildDiagram(cfg){
     const along = (d) => axisHoriz ? { x: jn.x + axisSgn * d, y: jn.y } : { x: jn.x, y: jn.y + axisSgn * d };
     const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
     const bufPoint = along(buf);
-    const nearCenter = along(buf + r), farCenter = along(buf + r + rowLen);
-    const rowANear = across(nearCenter, -r), rowAFar = across(farCenter, -r);
-    const rowBNear = across(nearCenter, r), rowBFar = across(farCenter, r);
+    const midPoint = along(buf + curveRun * 0.5);
+    const midA = across(midPoint, -r), midB = across(midPoint, r);
+    const rowAStart = across(along(buf + curveRun), -r), rowAFar = across(along(buf + curveRun + rowLen), -r);
+    const rowBStart = across(along(buf + curveRun), r), rowBFar = across(along(buf + curveRun + rowLen), r);
+    const farCenter = along(buf + curveRun + rowLen);
 
     const F = v => v.toFixed(2);
     const pt = p => `${F(p.x)} ${F(p.y)}`;
-    /* Short straight run from jn to bufPoint, quarter-arc around nearCenter
-       to rowANear, half-arc around farCenter to rowBFar, quarter-arc around
-       nearCenter from rowBNear back to bufPoint, straight run back to jn —
-       sweep flags picked so the whole thing bulges outward (away from jn)
-       rather than folding back on itself; flipped by axisSgn/axisHoriz so
-       it stays consistent whichever way the loop actually extends. */
+    /* Short straight run from jn to bufPoint, then a cubic-bezier S-curve
+       fork out to rowAStart — the same tangent-matched construction the
+       regular branch curves already use (horizontal in, horizontal out,
+       the bend happening entirely in between) rather than a fixed-radius
+       arc — straight run down Row A, a semicircle around the far cap,
+       straight run back up Row B, the same S-curve fork back to bufPoint,
+       straight run back to jn. Sweep flag on the far cap picked so it
+       bulges outward (away from jn); flipped by axisSgn/axisHoriz so it
+       stays consistent whichever way the loop actually extends. */
     const sweep = (axisHoriz ? axisSgn > 0 : axisSgn < 0) ? 1 : 0;
     const d = `M ${pt(jn)} L ${pt(bufPoint)} ` +
-              `A ${F(r)} ${F(r)} 0 0 ${sweep} ${pt(rowANear)} ` +
+              `C ${pt(midPoint)}, ${pt(midA)}, ${pt(rowAStart)} ` +
               `L ${pt(rowAFar)} ` +
               `A ${F(r)} ${F(r)} 0 1 ${sweep} ${pt(rowBFar)} ` +
-              `L ${pt(rowBNear)} ` +
-              `A ${F(r)} ${F(r)} 0 0 ${sweep} ${pt(bufPoint)} L ${pt(jn)}`;
+              `L ${pt(rowBStart)} ` +
+              `C ${pt(midB)}, ${pt(midPoint)}, ${pt(bufPoint)} L ${pt(jn)}`;
     drawBranchLine(d, bc, false);
-    bb.add(along(loopW).x, along(loopW).y);   // the far cap's own apex — no station marks it, so the bbox needs telling directly
+    const farApexPt = along(loopW);
+    bb.add(farApexPt.x, farApexPt.y);   // the far cap's own apex — no station marks it, so the bbox needs telling directly
+    extentPts.push(farApexPt);          // ...and it needs to count toward the left/right balancing below too, or that'll overcorrect
 
     lp.stations.forEach((st, i) => {
-      let p;
-      if (i < rowACount) p = across(along(buf + r + rowBuf + i * sp), -r);             // Row A, near -> far
-      else { const j = i - rowACount; p = across(along(buf + r + rowBuf + (rowBCount - 1 - j) * sp), r); }  // Row B, far -> near
-      nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:LOOPLABEL, kind:"", loop:lp });
+      let p, onRowA;
+      if (i < rowACount){ p = across(along(buf + curveRun + rowBuf + i * sp), -r); onRowA = true; }
+      else { const j = i - rowACount; p = across(along(buf + curveRun + rowBuf + (rowBCount - 1 - j) * sp), r); onRowA = false; }
+      const rowLabel = axisHoriz ? LOOPLABEL : (onRowA ? LOOP_LEFT : LOOP_RIGHT);
+      nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:rowLabel, kind:"", loop:lp });
     });
   });
 
@@ -1011,7 +1028,7 @@ function buildDiagram(cfg){
          stations, so long ones wrap onto two lines, stacked upward from
          the usual single-line position (name always sits above the
          caplet in loop layout). */
-      const lines = cfg.layout === "loop" ? wrapName(n.name, 12) : [n.name];
+      const lines = (cfg.layout === "loop" || n.loop) ? wrapName(n.name, 12) : [n.name];
       const lineHeight = STYLE.nameSize * 1.15;
       lines.forEach((lineText, li) => {
         const ly = ny - (lines.length - 1 - li) * lineHeight;
@@ -1140,7 +1157,7 @@ function buildDiagram(cfg){
        that needs to grow, shift them along with it by the same amount —
        they stay exactly as flush as they've always been, while the line
        itself ends up the one that's centred. */
-    const xs = nodes.map(n => n.x);
+    const xs = [...nodes.map(n => n.x), ...extentPts.map(p => p.x)];
     const leftGap = Math.min(...xs) - bb.x0, rightGap = bb.x1 - Math.max(...xs);
     if (rightGap > leftGap){
       const d = rightGap - leftGap;
@@ -1329,6 +1346,7 @@ const PRESET_GROUPS = [
     { key:"te", acr:"TEL", label:"Thomson-East Coast Line", colour:"#9d5b25", tier:"current" },
     { key:"bplrt", acr:"BP", label:"Bukit Panjang LRT", colour:"#718573", tier:"current" },
     { key:"sklrt", acr:"STC", label:"Sengkang LRT", colour:"#718573", tier:"current" },
+    { key:"pglrt", acr:"PTC", label:"Punggol LRT", colour:"#718573", tier:"current" },
   ]},
   { name:"Future", items:[
     { key:"jrl", acr:"JRL", label:"Jurong Region Line", colour:"#0099aa", tier:"future" },
@@ -1611,7 +1629,7 @@ TE31 Sungei Bedok       > DT37 {future}`
        balloon loop off Bukit Panjang (Service A clockwise via Senja,
        Service B anti-clockwise via Petir) that rejoins the same station
        rather than reaching a separate terminus. */
-    name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal",
+    name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal", spacing:75,
     spec:`BP1  Choa Chu Kang      > NS4, JS1
 BP2  South View
 BP3  Keat Hong
@@ -1619,7 +1637,7 @@ BP4  Teck Whye
 BP5  Phoenix
 BP6  Bukit Panjang       > DT1, BT9
 
-[loop at end down right]
+[loop at end]
 BP7  Petir
 BP8  Pending
 BP9  Bangkit
@@ -1631,17 +1649,17 @@ BP13 Senja`
   sklrt:{
     /* A "bowtie" shape — two balloon loops (East, West) both hanging off
        the single shared Sengkang station, with no tail at all. */
-    name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal",
+    name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal", spacing:75,
     spec:`STC  Sengkang            > NE16
 
-[loop at end up right]
+[loop at start]
 SE1  Compassvale
 SE2  Rumbia
 SE3  Bakau
 SE4  Kangkar
 SE5  Ranggung
 
-[loop at end down right]
+[loop at end]
 SW1  Cheng Lim
 SW2  Farmway
 SW3  Kupang
@@ -1650,6 +1668,30 @@ SW5  Fernvale
 SW6  Layar
 SW7  Tongkang
 SW8  Renjong`
+  },
+  pglrt:{
+    /* Another "bowtie" — East and West loops both hanging off the shared
+       Punggol station, no tail. */
+    name:"Punggol LRT", code:"PTC", colour:"#718573", layout:"horizontal", spacing:75,
+    spec:`PTC  Punggol             > NE17, BUS
+
+[loop at start]
+PE1  Cove
+PE2  Meridian
+PE3  Coral Edge
+PE4  Riviera             > NC4*
+PE5  Kadaloor
+PE6  Oasis
+PE7  Damai
+
+[loop at end]
+PW1  Sam Kee
+PW2  Teck Lee
+PW3  Punggol Point
+PW4  Samudera
+PW5  Nibong
+PW6  Sumang
+PW7  Soo Teck`
   },
   stl:{
     /* SPECULATIVE — not an official LTA project. Transcribed from a fan
@@ -2011,8 +2053,6 @@ function branchHeaderText(b){
 }
 function loopHeaderText(lp){
   let s = `[loop at ${lp.at || "end"}`;
-  if (lp.dir) s += ` ${lp.dir}`;
-  if (lp.grow && lp.grow !== lp.dir) s += ` ${lp.grow}`;
   if (lp.colour) s += `: ${lp.colour}`;
   s += "]";
   s += tagSuffix(lp.tier, false, lp.until);
@@ -2075,6 +2115,8 @@ function applyConfig(c){
   S.code.value = c.code || "";
   setColour(c.colour || "#005ec4");
   S.layout.value = c.layout || "horizontal";
+  spacingByLayout = {};   // a freshly-loaded preset starts with a clean slate — no stale spacing cached from whatever was loaded before
+  if (S.layout.value === "horizontal" || S.layout.value === "vertical") lastOrientation = S.layout.value;
   syncLayoutButtons();
   S.spacing.value = c.spacing || SPACING_DEFAULT[S.layout.value] || 100;
   S.branchSpacing.value = c.branchSpacing || BRANCH_SPACING_DEFAULT[S.layout.value] || 120;
@@ -2114,6 +2156,9 @@ function syncVisibility(){
   const l = S.layout.value;
   $("closedField").style.display = l === "loop"  ? "" : "none";
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
+  $("orientationField").style.display = l === "loop" ? "none" : "";
+  $("loopsContainer").style.display = l === "loop" ? "none" : "";
+  $("addLoopBtn").style.display = l === "loop" ? "none" : "";
   syncSpacingSlider();
   syncBranchSpacingSlider();
 }
@@ -2312,6 +2357,51 @@ function makeBranchBlock(b, bIdx){
   return wrap;
 }
 
+function makeLoopBlock(lp, lpIdx){
+  const wrap = document.createElement("div");
+  wrap.className = "branchBlock";
+
+  const head = document.createElement("div");
+  head.className = "branchHead";
+
+  const atLabel = document.createElement("span");
+  atLabel.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
+  atLabel.textContent = "loop at";
+  head.appendChild(atLabel);
+
+  const atSel = document.createElement("select");
+  atSel.className = "brFrom";
+  atSel.innerHTML = `<option value="start">start of trunk</option><option value="end">end of trunk</option>`;
+  atSel.value = lp.at === "start" ? "start" : "end";
+  atSel.onchange = () => { lp.at = atSel.value; syncTextFromLive(); renderEditorRows(); render(); };
+  head.appendChild(atSel);
+
+  const colourInp = document.createElement("input");
+  colourInp.type = "color"; colourInp.title = "Loop colour override";
+  colourInp.value = lp.colour || S.colour.value;
+  colourInp.oninput = () => { lp.colour = colourInp.value; syncTextFromLive(); render(); };
+  head.appendChild(colourInp);
+
+  const delBtn = document.createElement("button");
+  delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove loop";
+  delBtn.onclick = () => { live.loops.splice(lpIdx, 1); syncTextFromLive(); renderEditorRows(); render(); };
+  head.appendChild(delBtn);
+
+  wrap.appendChild(head);
+
+  const rows = document.createElement("div");
+  rows.className = "rowList branchRows";
+  lp.stations.forEach((st, i) => rows.appendChild(makeRow(st, i, lp.stations)));
+  wrap.appendChild(rows);
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button"; addBtn.className = "addBtn"; addBtn.textContent = "+ Add station to loop";
+  addBtn.onclick = () => { lp.stations.push({ code:"", name:"", ics:[] }); syncTextFromLive(); renderEditorRows(); render(); };
+  wrap.appendChild(addBtn);
+
+  return wrap;
+}
+
 function renderEditorRows(){
   const trunkRows = $("trunkRows");
   trunkRows.innerHTML = "";
@@ -2320,6 +2410,10 @@ function renderEditorRows(){
   const bc = $("branchesContainer");
   bc.innerHTML = "";
   live.branches.forEach((b, i) => bc.appendChild(makeBranchBlock(b, i)));
+
+  const lc = $("loopsContainer");
+  lc.innerHTML = "";
+  (live.loops || []).forEach((lp, i) => lc.appendChild(makeLoopBlock(lp, i)));
 }
 
 function setMode(next){
@@ -2603,21 +2697,46 @@ S.hex.addEventListener("input", () => {
   const v = S.hex.value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(v)){ S.colour.value = v; render(); }
 });
+/* The "Shape" (straight/loop) and "Orientation" (horizontal/vertical) rows
+   are two independent controls over the same underlying layout value —
+   orientation only means anything for a straight shape (a loop always
+   reads via its own rotate CW/CCW control instead), so it hides itself
+   whenever shape is "loop". `lastOrientation` remembers which one was
+   active so switching loop -> straight restores it rather than always
+   defaulting back to horizontal. */
+let lastOrientation = "horizontal";
+/* Remembers whatever spacing/branchSpacing was actually in use for each
+   layout value the user has already visited this preset (starting with
+   whatever the preset itself set) — so switching orientation away and back
+   restores it exactly, instead of clobbering a preset's own custom spacing
+   with the generic per-layout default every time. Reset whenever a new
+   preset loads (see applyConfig). */
+let spacingByLayout = {};
 function syncLayoutButtons(){
-  document.querySelectorAll("#layoutRow .spacingBtn").forEach(b => {
-    b.classList.toggle("active", b.dataset.value === S.layout.value);
+  const isLoop = S.layout.value === "loop";
+  document.querySelectorAll("#shapeRow .spacingBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.value === (isLoop ? "loop" : "straight"));
+  });
+  document.querySelectorAll("#orientationRow .spacingBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.value === (isLoop ? lastOrientation : S.layout.value));
   });
 }
 function setLayout(v){
+  spacingByLayout[S.layout.value] = { spacing:S.spacing.value, branchSpacing:S.branchSpacing.value };
+  if (v === "horizontal" || v === "vertical") lastOrientation = v;
   S.layout.value = v;
   syncLayoutButtons();
-  S.spacing.value = SPACING_DEFAULT[S.layout.value] || 100;
-  S.branchSpacing.value = BRANCH_SPACING_DEFAULT[S.layout.value] || 120;
+  const cached = spacingByLayout[v];
+  S.spacing.value = cached ? cached.spacing : (SPACING_DEFAULT[v] || 100);
+  S.branchSpacing.value = cached ? cached.branchSpacing : (BRANCH_SPACING_DEFAULT[v] || 120);
   syncVisibility();
   if (mode === "editor") renderEditorRows();
   render(); fit();
 }
-document.querySelectorAll("#layoutRow .spacingBtn").forEach(b => {
+document.querySelectorAll("#shapeRow .spacingBtn").forEach(b => {
+  b.onclick = () => setLayout(b.dataset.value === "loop" ? "loop" : lastOrientation);
+});
+document.querySelectorAll("#orientationRow .spacingBtn").forEach(b => {
   b.onclick = () => setLayout(b.dataset.value);
 });
 
@@ -2632,6 +2751,11 @@ $("addBranchBtn").onclick = () => {
     dir: S.layout.value === "vertical" ? "right" : "down",
     colour: null, stations: [{ code:"", name:"", ics:[] }]
   });
+  syncTextFromLive(); renderEditorRows(); render();
+};
+$("addLoopBtn").onclick = () => {
+  if (!live.loops) live.loops = [];
+  live.loops.push({ at:"end", colour:null, stations:[{ code:"", name:"", ics:[] }] });
   syncTextFromLive(); renderEditorRows(); render();
 };
 $("addLineInfoBtn").onclick = () => {
