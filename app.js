@@ -118,6 +118,24 @@ function setCodeText(tx, text, fontSize){
   tx.appendChild(t2);
 }
 
+/* Real LTA station-caplet outline, not a plain stadium/pill: flat top and
+   bottom edges joined by a quarter-ellipse cap at each end that's flatter
+   than a true semicircle (it only reaches ~30% of the caplet's own height
+   out horizontally, though it still spans the full height vertically) —
+   proportions read off a reference station-sign SVG. (x,y) is the
+   top-left corner of the bounding box, same convention as <rect>. */
+function capletPath(x, y, w, h){
+  const cw = Math.min(0.3 * h, w / 2);
+  const ry = h / 2;
+  const F = v => v.toFixed(2);
+  return `M ${F(x+cw)} ${F(y)} L ${F(x+w-cw)} ${F(y)} ` +
+         `A ${F(cw)} ${F(ry)} 0 0 1 ${F(x+w)} ${F(y+ry)} ` +
+         `A ${F(cw)} ${F(ry)} 0 0 1 ${F(x+w-cw)} ${F(y+h)} ` +
+         `L ${F(x+cw)} ${F(y+h)} ` +
+         `A ${F(cw)} ${F(ry)} 0 0 1 ${F(x)} ${F(y+ry)} ` +
+         `A ${F(cw)} ${F(ry)} 0 0 1 ${F(x+cw)} ${F(y)} Z`;
+}
+
 /* ------------------------------------------------------------------ parsing */
 /* Current/Future/Proposed roadmap tiers. A station or branch with no tag is
    "current" (always shown); {future}/{proposed} mark it as only appearing
@@ -721,7 +739,7 @@ function buildDiagram(cfg){
         clipCounter++;
         const clipId = `cap-clip-${clipCounter}`;
         const clip = el("clipPath", { id:clipId }, defs);
-        el("rect", { x:F2(rx0), y:F2(y0), width:F2(rx1-rx0), height:F2(h), rx:F2(h/2) }, clip);
+        el("path", { d:capletPath(rx0, y0, rx1-rx0, h) }, clip);
         const grp = el("g", { "clip-path":`url(#${clipId})` }, gLabels);
         run.forEach((s, i) => {
           el("rect", { x:F2(s.x0), y:F2(y0), width:F2(s.x1-s.x0), height:F2(h), fill:s.cd.c }, grp);
@@ -731,7 +749,7 @@ function buildDiagram(cfg){
                                   "letter-spacing":".3" }, gLabels);
           setCodeText(tx, s.cd.t, STYLE.codeSize);
         });
-        el("rect", { x:F2(rx0), y:F2(y0), width:F2(rx1-rx0), height:F2(h), rx:F2(h/2), fill:"none",
+        el("path", { d:capletPath(rx0, y0, rx1-rx0, h), fill:"none",
                      stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         bb.rect(rx0, y0, rx1-rx0, h);
       });
@@ -763,7 +781,7 @@ function buildDiagram(cfg){
           edge = edge + dir[1]*h;
         }
         const cx = n.x;
-        el("rect", { x:F2(cx - w/2), y:F2(cy - h/2), width:F2(w), height:F2(h), rx:F2(h/2),
+        el("path", { d:capletPath(cx - w/2, cy - h/2, w, h),
                      fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
                                 "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(cd.c),
@@ -874,7 +892,7 @@ function buildDiagram(cfg){
       const capW = codeBoxW(it.acr) * legendScale;
       const w = capW + 8 + measure(it.name, legendTextSize) + 18;
       if (lx + w > rowMaxX && lx > bb.x0){ lx = bb.x0; ly += 26; }
-      el("rect", { x:F2(lx), y:F2(ly - lh/2), width:F2(capW), height:F2(lh), rx:F2(lh/2), fill:it.colour }, g);
+      el("path", { d:capletPath(lx, ly - lh/2, capW, lh), fill:it.colour }, g);
       const capText = el("text", { x:F2(lx + capW/2), y:F2(ly + lh*0.22), "text-anchor":"middle",
                                    "font-size":F2(capFont), "font-weight":700, fill:contrastText(it.colour), "letter-spacing":".3" }, g);
       capText.textContent = it.acr;
