@@ -514,7 +514,7 @@ function drawOsiConnector(el, parent, x0, y0, x1, y1, thickness, colourA, colour
    colour-blend, just a thin plain line standing the two caplets apart. */
 function drawNearbyConnector(el, parent, x0, y0, x1, y1, colour){
   el("line", { x1:x0.toFixed(2), y1:y0.toFixed(2), x2:x1.toFixed(2), y2:y1.toFixed(2),
-               stroke:colour, "stroke-width":1.5, "stroke-linecap":"round" }, parent);
+               stroke:colour, "stroke-width":3, "stroke-linecap":"round" }, parent);
 }
 
 /* -------------------------------------------------------- stadium (loop) */
@@ -1135,8 +1135,7 @@ function buildDiagram(cfg){
     let farEdge = null;   // coordinate just past the last code, along dir's axis — where the bus icon (if any) continues from
     let ownCapletBox = null;   // bounding box of the station's own caplet — ringed separately if it's a SIR express stop
 
-    const OSI_GAP = 12;      // gap that stands an out-of-station code apart, bridged by a connector line
-    const NEARBY_GAP = 16;   // gap for a nearby (separate, unlinked) station, bridged by a thin line
+    const OSI_GAP = 12;   // gap that stands an out-of-station or nearby code apart, bridged by a connector line
 
     if (codes.length && horiz){
       /* Vertical layout: codes read left-to-right. A merged pill per
@@ -1151,7 +1150,7 @@ function buildDiagram(cfg){
       const segs = [{ cd:codes[0], x0:n.x - w0/2, x1:n.x + w0/2 }];
       let edge = growDir >= 0 ? n.x + w0/2 : n.x - w0/2;
       for (let i = 1; i < codes.length; i++){
-        const w = widths[i], gap = codes[i].osi ? OSI_GAP : codes[i].nearby ? NEARBY_GAP : 0;
+        const w = widths[i], gap = (codes[i].osi || codes[i].nearby) ? OSI_GAP : 0;
         let sx0, sx1;
         if (growDir >= 0){ sx0 = edge + gap; sx1 = sx0 + w; edge = sx1; }
         else { sx1 = edge - gap; sx0 = sx1 - w; edge = sx0; }
@@ -1206,7 +1205,7 @@ function buildDiagram(cfg){
         if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h }; }
         else {
           const gapStart = edge;
-          edge = edge + dir[1]*(cd.osi ? OSI_GAP : cd.nearby ? NEARBY_GAP : 0);
+          edge = edge + dir[1]*((cd.osi || cd.nearby) ? OSI_GAP : 0);
           cy = edge + dir[1]*(h/2);
           if (cd.osi) drawOsiConnector(el, gLabels, n.x, gapStart, n.x, edge, 5, codes[idx-1].c, cd.c);
           else if (cd.nearby) drawNearbyConnector(el, gLabels, n.x, gapStart, n.x, edge, textColour);
