@@ -424,45 +424,68 @@ function roundedPath(pts, r){
 function buildBridgeEndCurve(junction, growSgn, naturalSgn, curveStyle, by, hookR, sp, run, hookOvershoot, bb, leaving){
   const F = v => v.toFixed(2);
   const snapToGrid = x => junction.x + Math.round((x - junction.x) / sp) * sp;
+  /* "Leaving" walks trunk -> row, so it advances in naturalSgn (the row's
+     own flow direction) away from the junction. "Entering" walks row ->
+     trunk instead, so its anchor sits on the OPPOSITE side of the junction
+     (naturalSgn earlier along the flow), not the same side — reusing
+     +naturalSgn for both was exactly backwards for the entering case,
+     landing past the junction instead of before it. */
+  const flowSgn = leaving ? naturalSgn : -naturalSgn;
 
   if (growSgn === naturalSgn){
     /* direct lane-change curve, same style as a normal branch */
-    let anchorX = junction.x + naturalSgn * run;
+    let anchorX = junction.x + flowSgn * run;
     if (leaving) anchorX = snapToGrid(anchorX);
+    const startPt = leaving ? junction.x : anchorX, endPt = leaving ? anchorX : junction.x;
+    const startY = leaving ? junction.y : by, endY = leaving ? by : junction.y;
     if (curveStyle === "orthogonal"){
-      const pts = leaving
-        ? [[junction.x, junction.y], [junction.x, by], [anchorX, by]]
-        : [[anchorX, by], [junction.x, by], [junction.x, junction.y]];
-      return { d: roundedPath(pts, 56), anchorX };
+      /* leaving exits the junction vertically first (down/up to row level),
+         then runs horizontally to the anchor; entering is not simply that
+         reversed — it runs horizontally first (at row level, over to the
+         junction's own x), then drops vertically at the very end, since
+         that's where the visually distinct turn should sit right next to
+         the junction rather than right next to the anchor. */
+      const midPt = leaving ? [startPt, endY] : [endPt, startY];
+      return { d: roundedPath([[startPt, startY], midPt, [endPt, endY]], 56), anchorX };
     }
     const inset = Math.min(20, run * 0.3);
-    const sx = junction.x + naturalSgn * inset, ex = anchorX - naturalSgn * inset;
+    const sx = startPt + naturalSgn * inset, ex = endPt - naturalSgn * inset;
     const dMid = Math.abs(ex - sx);
     const c1x = sx + naturalSgn * dMid * 0.5, c2x = ex - naturalSgn * dMid * 0.5;
-    const d = leaving
-      ? `M ${F(junction.x)} ${F(junction.y)} L ${F(sx)} ${F(junction.y)} ` +
-        `C ${F(c1x)} ${F(junction.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(anchorX)} ${F(by)}`
-      : `M ${F(anchorX)} ${F(by)} L ${F(ex)} ${F(by)} ` +
-        `C ${F(c2x)} ${F(by)}, ${F(c1x)} ${F(junction.y)}, ${F(sx)} ${F(junction.y)} L ${F(junction.x)} ${F(junction.y)}`;
+    const d = `M ${F(startPt)} ${F(startY)} L ${F(sx)} ${F(startY)} ` +
+              `C ${F(c1x)} ${F(startY)}, ${F(c2x)} ${F(endY)}, ${F(ex)} ${F(endY)} L ${F(endPt)} ${F(endY)}`;
     return { d, anchorX };
   }
 
   /* hook: right half of a rounded rectangle — overshoot the junction, curve
      90° into a single straight run spanning the full row-to-trunk height,
-     then curve 90° again into the row. */
-  const hookX = junction.x + growSgn * hookOvershoot;
-  /* the short straight run feeding into the row needs to be at least ~2x
-     the corner radius itself, or `roundedPath` clamps the corner down to
-     half of whatever this segment actually is — otherwise a bigger hookR
-     here would have no visible effect. */
-  const inset = hookR * 1.5;
-  let anchorX = hookX + naturalSgn * inset;
+     then curve 90° again into the row. Leaving overshoots in its own
+     explicit grow direction (growSgn, which by definition conflicts with
+     naturalSgn here); entering instead keeps flowing naturally PAST the
+     junction first (naturalSgn) before doubling back to approach it. */
+  const hookSgn = leaving ? growSgn : naturalSgn;
+  const hookX = junction.x + hookSgn * hookOvershoot;
+  /* the short straight run feeding into the row needs to be at least 2x the
+     corner radius itself, or `roundedPath` clamps that corner down to half
+     of whatever this segment actually is — sized so it's never the
+     binding constraint below, leaving hookR itself (or the two segments
+     either side of it) to decide the actual radius instead. */
+  const inset = hookR * 2;
+  let anchorX = hookX + flowSgn * inset;
   if (leaving) anchorX = snapToGrid(anchorX);
   const pts = leaving
     ? [[junction.x, junction.y], [hookX, junction.y], [hookX, by], [anchorX, by]]
     : [[anchorX, by], [hookX, by], [hookX, junction.y], [junction.x, junction.y]];
   bb.add(hookX, junction.y); bb.add(hookX, by);
-  return { d: roundedPath(pts, hookR), anchorX };
+  /* Both of the hook's corners share this same radius — but `roundedPath`
+     clamps each corner independently to half of ITS OWN adjacent segments,
+     so the two could end up different sizes if e.g. hookOvershoot were
+     much shorter than inset. Pre-clamping here against every segment length
+     involved (rather than leaving it to roundedPath's own per-corner
+     clamp) guarantees both corners actually match. */
+  const gapDist = Math.abs(by - junction.y);
+  const r = Math.min(hookR, hookOvershoot / 2, gapDist / 2, inset / 2);
+  return { d: roundedPath(pts, r), anchorX };
 }
 
 /* A short thick bar between two out-of-station-interchange caplets, split
