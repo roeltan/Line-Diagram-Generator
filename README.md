@@ -245,3 +245,16 @@ own tier too, independent of the host station's tag — e.g. a real, open-today
 station can list a Cross Island Line cross-reference that only appears once
 the Roadmap toggle reaches Future, since CRL doesn't exist yet at Current.
 This is driven by each line prefix's own `tier` in the `LINE_INFO` table.
+
+## Legend order
+
+The legend at the bottom of a diagram always lists that diagram's own line
+first, then every other line referenced via an interchange code — but not
+alphabetically or in the order stations happen to mention them. Instead
+there's one enforced, app-wide line precedence (EWL, NSL, NEL, CCL, DTL,
+TEL, then the LRTs, then future-tier lines, then proposed-tier ones),
+editable via drag handles in the **Interchange colours** panel (under the
+line's own colour picker). Reordering it there re-sorts both that panel and
+every diagram's legend the same way. New lines (a fresh custom prefix, or
+one pulled in by a freshly-loaded preset) slot into this order at their
+default position automatically rather than always landing at the end.
