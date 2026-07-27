@@ -1232,7 +1232,7 @@ function buildDiagram(cfg){
        codes themselves stack (or straight off the station if there are
        none to show). */
     if (cfg.showBus && hasBus){
-      const busSize = h, gap = 4;
+      const busSize = h * 0.8, gap = 4;
       if (horiz){
         const growDir = -dir[0];
         const edgeX = farEdge !== null ? farEdge : n.x;
@@ -3275,6 +3275,76 @@ $("diagDarkBtn").onclick = () => { setDiagramDark(true); render(); };
 let savedTheme = null;
 try { savedTheme = localStorage.getItem("theme"); } catch (e){}
 applyTheme(savedTheme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+
+/* ----------------------------------------------------------- sidebar resize/collapse */
+(function setupSidebar(){
+  const layoutEl = document.querySelector(".layout");
+  const asideEl = document.querySelector("aside");
+  const resizer = $("sidebarResizer");
+  const hoverZone = $("sidebarHoverZone");
+  const toggleBtn = $("sidebarToggle");
+
+  let savedWidth = null;
+  try { savedWidth = localStorage.getItem("sidebarWidth"); } catch (e){}
+  if (savedWidth) document.documentElement.style.setProperty("--sidebar-w", savedWidth + "px");
+
+  let resizing = false;
+  resizer.addEventListener("mousedown", e => {
+    resizing = true;
+    resizer.classList.add("resizing");
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e => {
+    if (!resizing) return;
+    const w = Math.min(Math.max(e.clientX, 240), Math.round(window.innerWidth * 0.8));
+    document.documentElement.style.setProperty("--sidebar-w", w + "px");
+  });
+  window.addEventListener("mouseup", () => {
+    if (!resizing) return;
+    resizing = false;
+    resizer.classList.remove("resizing");
+    document.body.style.userSelect = "";
+    const w = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w").trim();
+    try { localStorage.setItem("sidebarWidth", parseInt(w, 10)); } catch (e){}
+  });
+
+  /* Collapse — hides the sidebar entirely, freeing the width for the
+     diagram. While collapsed, a thin strip along the left edge (or the
+     sidebar itself, once it's peeking) reveals it as a floating overlay on
+     hover, without permanently un-collapsing it — same idea as VS Code's
+     auto-hide sidebar. */
+  let collapsed = false;
+  try { collapsed = localStorage.getItem("sidebarCollapsed") === "1"; } catch (e){}
+  function applyCollapsed(){
+    layoutEl.classList.toggle("sidebar-collapsed", collapsed);
+    toggleBtn.textContent = collapsed ? "»" : "«";
+    toggleBtn.title = collapsed ? "Show sidebar" : "Hide sidebar";
+    if (!collapsed) asideEl.classList.remove("peeking");
+  }
+  toggleBtn.onclick = () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0"); } catch (e){}
+    applyCollapsed();
+  };
+  applyCollapsed();
+
+  let peekHideTimer = null;
+  const peek = () => {
+    if (!collapsed) return;
+    clearTimeout(peekHideTimer);
+    asideEl.classList.add("peeking");
+  };
+  const scheduleUnpeek = () => {
+    clearTimeout(peekHideTimer);
+    peekHideTimer = setTimeout(() => {
+      if (!asideEl.matches(":hover") && !hoverZone.matches(":hover")) asideEl.classList.remove("peeking");
+    }, 120);
+  };
+  hoverZone.addEventListener("mouseenter", peek);
+  hoverZone.addEventListener("mouseleave", scheduleUnpeek);
+  asideEl.addEventListener("mouseleave", scheduleUnpeek);
+})();
 
 /* ------------------------------------------------------------------- startup */
 let boot = null;

@@ -33,9 +33,32 @@
          border-bottom:1px solid var(--border);height:56px}
   header h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
   header .spacer{flex:1}
-  .layout{display:flex;height:calc(100% - 56px)}
-  aside{width:392px;min-width:392px;background:var(--panel);border-right:1px solid var(--border);
-        overflow-y:auto;padding:16px}
+  .layout{display:flex;height:calc(100% - 56px);position:relative}
+  aside{width:var(--sidebar-w,440px);min-width:240px;max-width:80vw;box-sizing:border-box;
+        background:var(--panel);border-right:1px solid var(--border);
+        overflow-y:auto;padding:16px;flex:none}
+  #sidebarResizer{width:6px;flex:none;cursor:col-resize;background:transparent}
+  #sidebarResizer:hover,#sidebarResizer.resizing{background:var(--accent)}
+  #sidebarHoverZone{display:none}
+  /* Collapsed: the sidebar leaves the flex flow (0-width) and instead sits
+     as a fixed-width overlay, translated fully offscreen — a thin hover
+     strip along the left edge (or focusing/hovering the sidebar itself,
+     once it's peeking out) slides it back into view without permanently
+     un-collapsing it, like VS Code's auto-hide sidebar. */
+  .layout.sidebar-collapsed aside{
+    width:0;min-width:0;padding:0;border-right:0;overflow:hidden;
+    position:absolute;left:0;top:0;bottom:0;z-index:50;
+    transition:width .15s ease,padding .15s ease;
+  }
+  .layout.sidebar-collapsed aside.peeking{
+    width:var(--sidebar-w,440px);min-width:240px;padding:16px;
+    border-right:1px solid var(--border);overflow-y:auto;
+    box-shadow:0 0 28px rgba(0,0,0,.28);
+  }
+  .layout.sidebar-collapsed #sidebarResizer{display:none}
+  .layout.sidebar-collapsed #sidebarHoverZone{
+    display:block;position:absolute;left:0;top:0;bottom:0;width:14px;z-index:49;
+  }
   main{flex:1;overflow:auto;background:
        linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%),
        linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%);
