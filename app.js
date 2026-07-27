@@ -89,7 +89,7 @@ const STYLE = {
   lineWidth:6,
   icStroke:"#33383d",
   nameSize:14, nameWeight:600, nameFill:"#1b1f24",
-  codeSize:10.5, codeH:20, codeGap:14,
+  codeSize:12, codeH:20, codeGap:14,
   capletOutlineW:1.3,
   sirOutlineColour:"#1b1f24", sirPad:0
 };
@@ -131,7 +131,7 @@ function splitCodeSuffix(t){
    "NS 29" without the caplet needing to widen much. */
 const THIN_SPACE = " ";
 const insertThinSpace = t => t.replace(/^([A-Za-z]+)(\d)/, `$1${THIN_SPACE}$2`);
-const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 7.2 + 11 + 2);
+const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 6.6 + 11 + 2);
 /* Fills a <text> element, rendering a detected suffix letter smaller. */
 function setCodeText(tx, text, fontSize){
   const { base, suffix } = splitCodeSuffix(text);
@@ -2142,27 +2142,28 @@ WP24 Punggol Coast        > NE18 {proposed}`
   sll:{
     name:"Seletar Line", code:"SLL", colour:"#eacd5e", layout:"horizontal",
     spec:`# STC proposal, not an official LTA project
-SL2  Seletar Airport      > NC6 {proposed}
+SP5  Simpang Bahru        > NC8! {proposed}
+SP4  Khatib Bongsu        {proposed}
+SP3  Yishun Park          {proposed}
+SP2  Miltonia             {proposed}
 SL3  Sengkang West        > ER14 {proposed}
 SL5  Tavistock            > CR10 {proposed}
 SL6  Lorong Chuan         > CC14 {proposed}
 SL7  Kim Keat             {proposed}
 SL8  Whampoa              {proposed}
 SL9  Farrer Park          > NE8 {proposed}
-SL10 Selegie              > DT13, DT22 {proposed}
-SL11 Esplanade            > HL16 {proposed}
-SL12 Raffles Place        > NS26, EW14 {proposed}
+SL10 Selegie              > DT13^, DT22^ {proposed}
+SL11 Esplanade            > HL16* {proposed}
+SL12 Raffles Place        > NS26^, EW14 {proposed}
 SL13 Straits View         > DT17, TE19 {proposed}
 SL14 Prince Edward Road   > CC1 {proposed}
-SL15 Southern Central     > WP10 {sir,proposed}
+SL15 Southern Central     > WP10! {proposed}
 SL16 Brani Resort         > NW10 {proposed}
 SL18 Beach Central        {proposed}
 
-[branch from SL3 down] {proposed}
-SP2  Miltonia             {proposed}
-SP3  Yishun Park          {proposed}
-SP4  Khatib Bongsu        {proposed}
-SP5  Simpang Bahru        > NC8 {sir,proposed}`
+[branch from SL3 left shuttle SP] {proposed}
+SL2  Seletar Airport      > NC6 {proposed}
+SL1  Pulau Punggol Barat  {proposed}`
   },
   btr:{
     name:"Bukit Timah Railway", code:"BTR", colour:"#ed5e0c", layout:"horizontal",
