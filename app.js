@@ -41,7 +41,7 @@ const LINE_INFO = {
   BT:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" }, BE:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" },
   ER:{ name:"Eastern Region Line", colour:"#cc2680", acr:"ERL", tier:"proposed" },
   NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL", tier:"proposed" },
-  NC:{ name:"North Coast Line", colour:"#3c78d8", acr:"NCL", tier:"proposed" }
+  NC:{ name:"North Coast Line", colour:"#4d91ba", acr:"NCL", tier:"proposed" }
 };
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
@@ -1743,7 +1743,7 @@ const PRESET_GROUPS = [
     { key:"btr", acr:"BTR", label:"Bukit Timah Railway", colour:"#ed5e0c", tier:"proposed" },
     { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680", tier:"proposed" },
     { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000", tier:"proposed" },
-    { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#3c78d8", tier:"proposed" },
+    { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#4d91ba", tier:"proposed" },
   ]},
   { name:"Other", items:[
     { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c", tier:"proposed" },
@@ -2345,7 +2345,7 @@ NR5  Sembawang North      > NC11 {proposed}
 NR6  Sembawang Shipyard   {proposed}`
   },
   ncl:{
-    name:"North Coast Line", code:"NCL", colour:"#3c78d8", layout:"horizontal",
+    name:"North Coast Line", code:"NCL", colour:"#4d91ba", layout:"horizontal",
     spec:`# STC proposal, not an official LTA project
 NC1  Pasir Ris            > CR5, EW1 {sir,proposed}
 NC2  Elias                {proposed}
