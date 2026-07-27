@@ -1543,8 +1543,8 @@ const PRESET_GROUPS = [
   { name:"Current", items:[
     { key:"ns", acr:"NSL", label:"North-South Line",  colour:"#d42e12", tier:"current" },
     { key:"ew", acr:"EWL", label:"East-West Line",     colour:"#009645", tier:"current" },
-    { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d", tier:"current" },
     { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa", tier:"current" },
+    { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d", tier:"current" },
     { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4", tier:"current" },
     { key:"te", acr:"TEL", label:"Thomson-East Coast Line", colour:"#9d5b25", tier:"current" },
     { key:"bplrt", acr:"BP", label:"Bukit Panjang LRT", colour:"#718573", tier:"current" },
@@ -1631,7 +1631,7 @@ EW28 Pioneer
 EW27 Boon Lay              > JS8, BUS
 EW26 Lakeside
 EW25 Chinese Garden
-EW24 Jurong East        > NS1, JE5
+EW24 Jurong East        > NS1, JE5, BUS
 EW23 Clementi              > CR17, BUS
 EW22 Dover
 EW21 Buona Vista        > CC22
@@ -1658,7 +1658,7 @@ EW1  Pasir Ris             > CR5, BUS
 
 [branch from EW4 down shuttle CG] {until:future}
 CG1  Expo               > DT35
-CG2  Changi Airport
+CG2  Changi Airport        > BUS
 # CAL2TEL — officially announced Jul 2025: the Changi Airport Branch Line
 # converts to the Thomson-East Coast Line by 2031, with a new terminal
 # station. Light-touch addition here rather than a full EWL->TEL remodel.
@@ -1802,7 +1802,7 @@ TE6  Mayflower
 TE7  Bright Hill        > CR13
 TE8  Upper Thomson
 TE9  Caldecott          > CC17
-TE10 Mount Pleasant
+TE10 Mount Pleasant     {future}
 TE11 Stevens            > DT10
 TE12 Napier
 TE13 Orchard Boulevard
@@ -1813,9 +1813,9 @@ TE17 Outram Park        > EW16, NE3
 TE18 Maxwell
 TE19 Shenton Way
 TE20 Marina Bay         > NS27, CC33
-TE21 Marina South
+TE21 Marina South       {future}
 TE22 Gardens by the Bay
-TE22A Founders' Memorial
+TE22A Founders' Memorial {future}
 TE23 Tanjong Rhu
 TE24 Katong Park
 TE25 Tanjong Katong
