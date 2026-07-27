@@ -2548,7 +2548,7 @@ function makeRow(st, idx, arr){
   top.appendChild(del);
 
   const icsInp = document.createElement("input");
-  icsInp.className = "stIcs"; icsInp.placeholder = "IC codes"; icsInp.value = (st.ics || []).join(", ");
+  icsInp.className = "stIcs"; icsInp.placeholder = "Add-ons (e.g. EW13*, BUS)"; icsInp.value = (st.ics || []).join(", ");
   icsInp.oninput = () => {
     st.ics = icsInp.value.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
     syncTextFromLive(); render();
@@ -2898,12 +2898,16 @@ function setZoom(z){ zoom = Math.min(4, Math.max(.08, z)); applyZoom(); }
    actually unobstructed — subtract the header's height and, when the
    sidebar isn't collapsed, its current width, so "fit" still sizes the
    diagram to the visible canvas rather than the area hidden under chrome. */
-function availSize(){
-  const m = $("main");
+const HEADER_H = 56;
+function currentSidebarWidth(){
   const layoutEl = document.querySelector(".layout");
   const collapsed = layoutEl.classList.contains("sidebar-collapsed");
-  const asideW = collapsed ? 0 : document.querySelector("aside").getBoundingClientRect().width;
-  return { w: m.clientWidth - asideW - 60, h: m.clientHeight - 56 - 60 };
+  return collapsed ? 0 : document.querySelector("aside").getBoundingClientRect().width;
+}
+function availSize(){
+  const m = $("main");
+  const asideW = currentSidebarWidth();
+  return { w: m.clientWidth - asideW - 60, h: m.clientHeight - HEADER_H - 60 };
 }
 function fit(){
   if (!current) return;
@@ -2935,7 +2939,11 @@ function applyPan(){
   document.documentElement.style.setProperty("--pan-x", panX + "px");
   document.documentElement.style.setProperty("--pan-y", panY + "px");
 }
-function resetPan(){ panX = 0; panY = 0; applyPan(); }
+/* "Reset" doesn't mean (0,0) — main is full-bleed behind the always-overlaying
+   header/sidebar now, so (0,0) would tuck the diagram's corner right behind
+   them. Instead reset to the top-left corner of the actually-visible canvas,
+   i.e. just past the sidebar's current width and the header's height. */
+function resetPan(){ panX = currentSidebarWidth(); panY = HEADER_H; applyPan(); }
 (function setupPan(){
   const mainEl = $("main");
   let dragging = false, startX = 0, startY = 0, origX = 0, origY = 0;
