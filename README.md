@@ -104,7 +104,10 @@ the "to" station and curves back to meet it — same as the real Hainault
 Loop extends further out than the direct trunk distance. Only supported on
 a horizontal trunk — elsewhere it falls back to a normal dead-end branch
 with a warning. Both the `from` and `to` stations get the same 1.5x
-flanking-gap treatment a normal branch junction gets, on both sides.
+flanking-gap treatment a normal branch junction gets, on both sides. Its
+stations also land on the same station-spacing grid as the trunk (measured
+from the `from` station), so they line up vertically with wherever an
+ordinary trunk station could sit.
 
 Each end has its own independent grow direction and curve style, same as a
 normal branch — `left`/`right` right after the `from` code sets the start

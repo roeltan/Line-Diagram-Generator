@@ -393,6 +393,66 @@ function roundedPath(pts, r){
   return d;
 }
 
+/* One end of a bridge branch's own curve between the trunk and its row —
+   either "leaving" the trunk (the branch's "from" end, walked trunk -> row)
+   or "entering" it (the "to" end, walked row -> trunk). Both ends share the
+   exact same two shapes (a direct lane-change curve, or a hooked "right
+   half of a rounded rectangle" turn when the requested grow direction
+   opposes the one that reaches the other junction directly) — only the
+   direction they're walked in, and which end of the resulting path is the
+   trunk vs. the row, differs, so the algebra lives here once and each
+   caller just says which way it's facing.
+   Returns `{ d, anchorX }`: `d` is the path fragment (including its own
+   leading M), and `anchorX` is the row-level x this end's own stations
+   begin from ("leaving") or the straight middle section should aim for
+   ("entering"). For the "leaving" end specifically, `anchorX` is snapped
+   to the trunk's own station-spacing grid (measured from `junction.x`) so
+   every bridge-branch station lines up with where an ordinary trunk
+   station could sit, the same way the trunk's own stations do. */
+function buildBridgeEndCurve(junction, growSgn, naturalSgn, curveStyle, by, hookR, sp, run, hookOvershoot, bb, leaving){
+  const F = v => v.toFixed(2);
+  const snapToGrid = x => junction.x + Math.round((x - junction.x) / sp) * sp;
+
+  if (growSgn === naturalSgn){
+    /* direct lane-change curve, same style as a normal branch */
+    let anchorX = junction.x + naturalSgn * run;
+    if (leaving) anchorX = snapToGrid(anchorX);
+    if (curveStyle === "orthogonal"){
+      const pts = leaving
+        ? [[junction.x, junction.y], [junction.x, by], [anchorX, by]]
+        : [[anchorX, by], [junction.x, by], [junction.x, junction.y]];
+      return { d: roundedPath(pts, 56), anchorX };
+    }
+    const inset = Math.min(20, run * 0.3);
+    const sx = junction.x + naturalSgn * inset, ex = anchorX - naturalSgn * inset;
+    const dMid = Math.abs(ex - sx);
+    const c1x = sx + naturalSgn * dMid * 0.5, c2x = ex - naturalSgn * dMid * 0.5;
+    const d = leaving
+      ? `M ${F(junction.x)} ${F(junction.y)} L ${F(sx)} ${F(junction.y)} ` +
+        `C ${F(c1x)} ${F(junction.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(anchorX)} ${F(by)}`
+      : `M ${F(anchorX)} ${F(by)} L ${F(ex)} ${F(by)} ` +
+        `C ${F(c2x)} ${F(by)}, ${F(c1x)} ${F(junction.y)}, ${F(sx)} ${F(junction.y)} L ${F(junction.x)} ${F(junction.y)}`;
+    return { d, anchorX };
+  }
+
+  /* hook: right half of a rounded rectangle — overshoot the junction, curve
+     90° into a single straight run spanning the full row-to-trunk height,
+     then curve 90° again into the row. */
+  const hookX = junction.x + growSgn * hookOvershoot;
+  /* the short straight run feeding into the row needs to be at least ~2x
+     the corner radius itself, or `roundedPath` clamps the corner down to
+     half of whatever this segment actually is — otherwise a bigger hookR
+     here would have no visible effect. */
+  const inset = hookR * 1.5;
+  let anchorX = hookX + naturalSgn * inset;
+  if (leaving) anchorX = snapToGrid(anchorX);
+  const pts = leaving
+    ? [[junction.x, junction.y], [hookX, junction.y], [hookX, by], [anchorX, by]]
+    : [[anchorX, by], [hookX, by], [hookX, junction.y], [junction.x, junction.y]];
+  bb.add(hookX, junction.y); bb.add(hookX, by);
+  return { d: roundedPath(pts, hookR), anchorX };
+}
+
 /* A short thick bar between two out-of-station-interchange caplets, split
    into two colours (matching each side) by a diagonal seam angled 30°
    off square to the bar, rather than a plain straight cut. */
@@ -780,59 +840,13 @@ function buildDiagram(cfg){
         const growToSgn = b.growTo === "left" ? 1 : b.growTo === "right" ? -1 : naturalSgn;
         const curveFrom = b.curve || "smooth";
         const curveTo = b.curveTo || "smooth";
+        const hookRFrom = curveFrom === "orthogonal" ? 30 : 200;
+        const hookRTo = curveTo === "orthogonal" ? 40 : 100;
 
-        let fromX, dFrom;
-        if (growFromSgn === naturalSgn){
-          fromX = jn.x + naturalSgn * run;
-          if (curveFrom === "orthogonal"){
-            dFrom = roundedPath([[jn.x, jn.y], [jn.x, by], [fromX, by]], 56);
-          } else {
-            const inset = Math.min(20, run * 0.3);
-            const sx = jn.x + naturalSgn * inset, ex = fromX - naturalSgn * inset;
-            const dMid = Math.abs(ex - sx);
-            const c1x = sx + naturalSgn * dMid * 0.5, c2x = ex - naturalSgn * dMid * 0.5;
-            dFrom = `M ${F(jn.x)} ${F(jn.y)} L ${F(sx)} ${F(jn.y)} ` +
-                    `C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(fromX)} ${F(by)}`;
-          }
-        } else {
-          /* right half of a rounded rectangle: overshoot the junction, curve
-             90° into a single straight run spanning the full row-to-trunk
-             height, then curve 90° again into the row — not a separate
-             "outer level" detour, just one clean rounded corner at each end
-             of that vertical run. */
-          const hookR = curveFrom === "orthogonal" ? 40 : 100;
-          /* the short straight run feeding into the row needs to be at
-             least ~2x the corner radius itself, or `roundedPath` clamps the
-             corner down to half of whatever this segment actually is —
-             otherwise a bigger hookR here would have no visible effect. */
-          const inset = Math.min(hookR * 1.3, hookOvershoot * 0.5);
-          const hookX = jn.x + growFromSgn * hookOvershoot;
-          fromX = hookX + naturalSgn * inset;
-          dFrom = roundedPath([[jn.x, jn.y], [hookX, jn.y], [hookX, by], [fromX, by]], hookR);
-          bb.add(hookX, jn.y); bb.add(hookX, by);
-        }
-
-        let toX, dTo;
-        if (growToSgn === naturalSgn){
-          toX = jn2.x - naturalSgn * run;
-          if (curveTo === "orthogonal"){
-            dTo = roundedPath([[toX, by], [jn2.x, by], [jn2.x, jn2.y]], 56);
-          } else {
-            const inset = Math.min(20, run * 0.3);
-            const sx2 = toX + naturalSgn * inset, ex2 = jn2.x - naturalSgn * inset;
-            const dMid2 = Math.abs(ex2 - sx2);
-            const c1x2 = sx2 + naturalSgn * dMid2 * 0.5, c2x2 = ex2 - naturalSgn * dMid2 * 0.5;
-            dTo = `M ${F(toX)} ${F(by)} L ${F(sx2)} ${F(by)} ` +
-                  `C ${F(c1x2)} ${F(by)}, ${F(c2x2)} ${F(jn2.y)}, ${F(ex2)} ${F(jn2.y)} L ${F(jn2.x)} ${F(jn2.y)}`;
-          }
-        } else {
-          const hookR2 = curveTo === "orthogonal" ? 40 : 200;
-          const inset2 = Math.min(hookR2 * 1.3, hookOvershoot * 0.5);
-          const hookX2 = jn2.x + naturalSgn * hookOvershoot;
-          toX = hookX2 - naturalSgn * inset2;
-          dTo = roundedPath([[toX, by], [hookX2, by], [hookX2, jn2.y], [jn2.x, jn2.y]], hookR2);
-          bb.add(hookX2, by); bb.add(hookX2, jn2.y);
-        }
+        const { d: dFrom, anchorX: fromX } = buildBridgeEndCurve(
+          jn, growFromSgn, naturalSgn, curveFrom, by, hookRFrom, sp, run, hookOvershoot, bb, true);
+        const { d: dTo, anchorX: toX } = buildBridgeEndCurve(
+          jn2, growToSgn, naturalSgn, curveTo, by, hookRTo, sp, run, hookOvershoot, bb, false);
 
         const n = b.stations.length;
         b.stations.forEach((st, i) => {
