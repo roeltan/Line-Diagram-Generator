@@ -131,7 +131,7 @@ function splitCodeSuffix(t){
    "NS 29" without the caplet needing to widen much. */
 const THIN_SPACE = " ";
 const insertThinSpace = t => t.replace(/^([A-Za-z]+)(\d)/, `$1${THIN_SPACE}$2`);
-const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 6.6 + 11 + 2);
+const codeBoxW = t => Math.max(CODE_BOX_W_MIN, splitCodeSuffix(t).base.length * 7.2 + 11 + 2);
 /* Fills a <text> element, rendering a detected suffix letter smaller. */
 function setCodeText(tx, text, fontSize){
   const { base, suffix } = splitCodeSuffix(text);
@@ -2403,7 +2403,9 @@ function makeSirCheckbox(st, onChange){
   cb.checked = !!st.sir;
   cb.onchange = () => { st.sir = cb.checked; onChange(); };
   lbl.appendChild(cb);
-  lbl.appendChild(document.createTextNode("SIR"));
+  const em = document.createElement("em");
+  em.textContent = "EX";
+  lbl.appendChild(em);
   wrap.appendChild(lbl);
   return wrap;
 }

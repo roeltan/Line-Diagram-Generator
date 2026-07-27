@@ -189,8 +189,12 @@
   /* LTA Identity used sparingly — just this caplet acronym, not the rest of
      the UI — matching the diagram's own caplet font. Falls back to the
      system stack the same way the diagram does when the font isn't installed. */
+  /* Matches the diagram's own capletPath() proportions (a flat top/bottom
+     with a flatter-than-semicircle cap, not a true stadium/pill) via CSS's
+     elliptical border-radius shorthand: horizontal radius 0.3*height,
+     vertical radius height/2 — same ratio the SVG caplet path uses. */
   .presetCap{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:19px;
-             padding:0 6px;border-radius:9.5px;font-size:10px;font-weight:800;letter-spacing:.3px;
+             padding:0 6px;border-radius:5.7px / 9.5px;font-size:10px;font-weight:800;letter-spacing:.3px;
              font-family:"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif}
 
   .modeToggle{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;flex:none}
