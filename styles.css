@@ -252,9 +252,14 @@
   .branchOpts .chk{margin:0}
   .brShuttleLabel{width:130px;flex:none;padding:6px 8px;border:1px solid var(--border);border-radius:6px;
                    background:var(--field);color:var(--ink);font-size:12px}
-  .brCurve{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--field);
-           font-size:12px;color:var(--ink);width:auto}
-  .brCurve:disabled{opacity:.5}
+  /* .brCurveTo (the bridge branch's "end" curve-style select) previously had
+     no matching rule at all, so it fell back to the bare browser default
+     look — and even styled, `width:auto` let the two selects size
+     differently since "(start)"/"(end)" option text isn't the same length.
+     Both now share one rule with a fixed width so they line up. */
+  .brCurve, .brCurveTo{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--field);
+           font-size:12px;color:var(--ink);width:170px;flex:none}
+  .brCurve:disabled, .brCurveTo:disabled{opacity:.5}
   .branchDel{flex:none;border:1px solid var(--border);border-radius:6px;background:var(--field);
              color:var(--muted);padding:5px 8px;font-size:11px}
   .branchDel:hover{color:#c0392b;border-color:#c0392b}
