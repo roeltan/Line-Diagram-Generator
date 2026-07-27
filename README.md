@@ -70,7 +70,11 @@ CODE  Station Name  > IC1, IC2
 - Tag a station with `{sir}` to mark it as a SIR express-service stop — it
   renders with a dark outline around its own caplet instead of the usual light
   one, toggled separately ("Show SIR express stops"). Combine with a roadmap
-  tag using a comma, e.g. `{proposed,sir}`.
+  tag using a comma, e.g. `{proposed,sir}`. Also settable from the Editor via
+  the "SIR" checkbox on each station tile.
+- Suffix an interchange code with `!` to mark that *interchange* itself as a
+  SIR express stop, independent of the host station's own `{sir}` tag (e.g.
+  `NC8!`) — combine with `*`/`^` by putting `!` last (e.g. `EW13*!`).
 - Use `CODE | Name` instead if the name would otherwise be ambiguous.
 - `#` starts a comment line.
 

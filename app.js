@@ -1119,13 +1119,16 @@ function buildDiagram(cfg){
       const bt = busTier(c);
       return bt !== null && TIER_RANK[bt] <= cfg.tierRank;
     });
-    if (cfg.showIc) n.ics.forEach(c => {
-      if (busTier(c) !== null) return;        // a nearby bus interchange, drawn separately as an icon
+    if (cfg.showIc) n.ics.forEach(raw => {
+      if (busTier(raw) !== null) return;      // a nearby bus interchange, drawn separately as an icon
+      let c = raw;
+      const icSir = /!$/.test(c);             // trailing ! marks that interchange itself as a SIR express stop
+      if (icSir) c = c.slice(0, -1);
       const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
       const nearby = /\^$/.test(c);           // trailing ^ marks a nearby (separate, unlinked) station
       const t = (osi || nearby) ? c.slice(0, -1) : c;
       if (TIER_RANK[tierOfCode(t)] > cfg.tierRank) return;   // that other line doesn't exist yet at this roadmap tier
-      codes.push({ t, c:colourForCode(t, n.colour), osi, nearby });
+      codes.push({ t, c:colourForCode(t, n.colour), osi, nearby, sir:icSir });
     });
 
     const dir = L.codeDir;
@@ -1133,7 +1136,8 @@ function buildDiagram(cfg){
     const h = STYLE.codeH;
     let codesExtent = 0;
     let farEdge = null;   // coordinate just past the last code, along dir's axis — where the bus icon (if any) continues from
-    let ownCapletBox = null;   // bounding box of the station's own caplet — ringed separately if it's a SIR express stop
+    let ownCapletBox = null;   // bounding box of the station's own caplet — used for name/bus placement math
+    const sirBoxes = [];       // caplet/pill boxes to ring — the station's own (if n.sir) plus any `!`-tagged IC
 
     const OSI_GAP = 12;   // gap that stands an out-of-station or nearby code apart, bridged by a connector line
 
@@ -1178,6 +1182,7 @@ function buildDiagram(cfg){
       runs.forEach((run, runIdx) => {
         const rx0 = Math.min(...run.map(s => s.x0)), rx1 = Math.max(...run.map(s => s.x1));
         if (runIdx === 0) ownCapletBox = { x:rx0, y:y0, w:rx1-rx0, h };
+        if ((runIdx === 0 && n.sir) || run.some(s => s.cd.sir)) sirBoxes.push({ x:rx0, y:y0, w:rx1-rx0, h });
         clipCounter++;
         const clipId = `cap-clip-${clipCounter}`;
         const clip = el("clipPath", { id:clipId }, defs);
@@ -1240,6 +1245,7 @@ function buildDiagram(cfg){
         const { cd, w, cy } = p;
         const cx = n.x;
         if (idx === 0) ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h };
+        if ((idx === 0 && n.sir) || cd.sir) sirBoxes.push({ x:n.x - w/2, y:cy - h/2, w, h });
         el("path", { d:capletPath(cx - w/2, cy - h/2, w, h),
                      fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
@@ -1258,18 +1264,21 @@ function buildDiagram(cfg){
       farEdge = edge;
     }
 
-    /* SIR express-service stop — a dark outline ring around the station's
-       own caplet (not its interchange codes), echoing the emphasis used for
-       interchanges on some overseas metro maps but repurposed here to flag
-       express stops instead. */
-    if (cfg.showSir && n.sir && ownCapletBox){
+    /* SIR express-service stop — a dark outline ring around a caplet,
+       echoing the emphasis used for interchanges on some overseas metro
+       maps but repurposed here to flag express stops instead. Rings the
+       station's own caplet (station tagged {sir}) and/or any individual
+       interchange caplet tagged with a trailing `!` (e.g. `NC8!`) — a
+       station can have either, both, or neither independently. */
+    if (cfg.showSir && sirBoxes.length){
       const pad = STYLE.sirPad;
-      const sirW = STYLE.capletOutlineW + 0.7;
+      const sirW = STYLE.capletOutlineW;
       const sirColour = cfg.dark ? "#e8eaed" : STYLE.sirOutlineColour;
-      el("path", { d:capletPath(ownCapletBox.x - pad, ownCapletBox.y - pad,
-                                 ownCapletBox.w + pad*2, ownCapletBox.h + pad*2),
-                   fill:"none", stroke:sirColour, "stroke-width":sirW }, gLabels);
-      bb.rect(ownCapletBox.x - pad*2, ownCapletBox.y - pad*2, ownCapletBox.w + pad*4, ownCapletBox.h + pad*4);
+      sirBoxes.forEach(box => {
+        el("path", { d:capletPath(box.x - pad, box.y - pad, box.w + pad*2, box.h + pad*2),
+                     fill:"none", stroke:sirColour, "stroke-width":sirW }, gLabels);
+        bb.rect(box.x - pad*2, box.y - pad*2, box.w + pad*4, box.h + pad*4);
+      });
     }
 
     /* bus interchange icon — a reserved "BUS" entry in the interchange
@@ -2376,6 +2385,28 @@ function makeTierCheckboxes(item, onChange){
   });
   return wrap;
 }
+/* A single SIR (express-stop) checkbox for a station row — kept visually
+   separate from the tier checkboxes (its own dark/ink accent colour, plus
+   a thin divider in the CSS) since it's an unrelated concept: which
+   roadmap tiers a station shows at vs. whether it's an express stop. */
+function makeSirCheckbox(st, onChange){
+  const wrap = document.createElement("span");
+  wrap.className = "sirCheckWrap";
+  const divider = document.createElement("span");
+  divider.className = "sirDivider";
+  wrap.appendChild(divider);
+  const lbl = document.createElement("label");
+  lbl.className = "sirChk";
+  lbl.title = "SIR express-service stop";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = !!st.sir;
+  cb.onchange = () => { st.sir = cb.checked; onChange(); };
+  lbl.appendChild(cb);
+  lbl.appendChild(document.createTextNode("SIR"));
+  wrap.appendChild(lbl);
+  return wrap;
+}
 function stLineText(st){
   const code = (st.code || "").trim(), name = (st.name || "").trim();
   let s = code ? (name ? `${code} | ${name}` : code) : name;
@@ -2601,6 +2632,7 @@ function makeRow(st, idx, arr){
   bottom.appendChild(icsInp);
 
   bottom.appendChild(makeTierCheckboxes(st, () => { syncTextFromLive(); render(); }));
+  bottom.appendChild(makeSirCheckbox(st, () => { syncTextFromLive(); render(); }));
 
   row.addEventListener("dragstart", () => { dragCtx = { arr, idx }; row.classList.add("dragging"); });
   row.addEventListener("dragend", () => row.classList.remove("dragging"));

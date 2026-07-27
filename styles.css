@@ -225,6 +225,16 @@
            padding:2px 4px;border-radius:5px;border:1px solid var(--border);background:var(--field)}
   .tierChk:has(input:checked){color:#fff;background:var(--accent);border-color:var(--accent)}
   .tierChk input{width:11px;height:11px;margin:0;accent-color:var(--accent)}
+  /* SIR express-stop toggle — deliberately kept apart from the tier
+     checkboxes (own dark/ink accent + a divider bar) since it's an
+     unrelated concept, not another roadmap-tier option. */
+  .sirCheckWrap{display:flex;flex:none;align-items:center;gap:8px;margin-left:4px}
+  .sirDivider{width:1px;align-self:stretch;background:var(--border)}
+  .sirChk{display:flex;align-items:center;gap:2px;font-size:10.5px;font-weight:650;
+          color:var(--muted);text-transform:none;letter-spacing:0;margin:0;cursor:pointer;
+          padding:2px 4px;border-radius:5px;border:1px solid var(--border);background:var(--field)}
+  .sirChk:has(input:checked){color:#fff;background:#1b1f24;border-color:#1b1f24}
+  .sirChk input{width:11px;height:11px;margin:0;accent-color:#1b1f24}
   .addBtn{width:100%;padding:7px;border:1px dashed var(--border);border-radius:7px;background:transparent;
           color:var(--muted);font-size:12.5px;margin-bottom:14px}
   .addBtn:hover{border-color:var(--accent);color:var(--accent);border-style:solid}
