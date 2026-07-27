@@ -62,6 +62,18 @@ function tierOfCode(code){
   return (info && info.tier) || "current";
 }
 
+/* A bus interchange's own roadmap tier — most are already there today
+   ("BUS"), but some (e.g. a station getting a bus interchange added later)
+   aren't built yet: "BUS(future)"/"BUS(proposed)". Parens rather than the
+   usual {tag} braces, since a brace tag at the end of an ics entry would
+   collide with the whole *station* line's own trailing {tag} instead.
+   Returns the code's tier if it's a bus entry at all, else null. */
+const BUS_RE = /^bus(?:\(([a-z]+)\))?$/i;
+function busTier(code){
+  const m = BUS_RE.exec((code || "").trim());
+  return m ? (m[1] || "current").toLowerCase() : null;
+}
+
 /* Picks white or dark text for legibility against a given caplet/badge
    background colour (e.g. Circle Line's light orange needs dark text). */
 function contrastText(hex){
@@ -1072,9 +1084,12 @@ function buildDiagram(cfg){
     const L = n.label;
     const codes = [];
     if (cfg.showCodes && n.code) codes.push({ t:n.code, c:n.colour });
-    const hasBus = n.ics.some(c => /^bus$/i.test(c));
+    const hasBus = n.ics.some(c => {
+      const bt = busTier(c);
+      return bt !== null && TIER_RANK[bt] <= cfg.tierRank;
+    });
     if (cfg.showIc) n.ics.forEach(c => {
-      if (/^bus$/i.test(c)) return;           // a nearby bus interchange, drawn separately as an icon
+      if (busTier(c) !== null) return;        // a nearby bus interchange, drawn separately as an icon
       const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
       const t = osi ? c.slice(0, -1) : c;
       if (TIER_RANK[tierOfCode(t)] > cfg.tierRank) return;   // that other line doesn't exist yet at this roadmap tier
@@ -1250,7 +1265,7 @@ function buildDiagram(cfg){
 
     /* no code to show at all (rare) — a small tick stands in for a marker */
     if (!codes.length){
-      const isIC = n.ics.length > 0;
+      const isIC = n.ics.some(c => { const bt = busTier(c); return bt === null || TIER_RANK[bt] <= cfg.tierRank; });
       const tickLen = n.kind === "term" ? 16 : 10;
       const x1t = n.x - dir[0]*tickLen/2, y1t = n.y - dir[1]*tickLen/2;
       const x2t = n.x + dir[0]*tickLen/2, y2t = n.y + dir[1]*tickLen/2;
@@ -1289,7 +1304,7 @@ function buildDiagram(cfg){
      no need to guess it via the LINE_INFO prefix table */
   if (cfg.name || cfg.code) pushLegend(cfg.name || cfg.code, colour, cfg.code || cfg.name);
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(code => {
-    if (/^bus$/i.test(code)) return;                           // a nearby bus interchange, not a rail line
+    if (busTier(code) !== null) return;                        // a nearby bus interchange, not a rail line
     if (n.shuttleIcs && n.shuttleIcs.includes(code)) return;   // shuttle spur of this same line, not a separate interchange
     if (TIER_RANK[tierOfCode(code)] > cfg.tierRank) return;    // that other line doesn't exist yet at this roadmap tier
     const m = /^([A-Za-z]+)/.exec(code || "");
@@ -1645,7 +1660,7 @@ EW14 Raffles Place      > NS26
 EW13 City Hall          > NS25
 EW12 Bugis              > DT14
 EW11 Lavender
-EW10 Kallang               > BUS
+EW10 Kallang               > BUS(future)
 EW9  Aljunied
 EW8  Paya Lebar         > CC9
 EW7  Eunos                 > BUS
@@ -1756,7 +1771,7 @@ DT1  Bukit Panjang      > BP6*, BT9, BUS
 DT2  Cashew
 DT3  Hillview
 DT4  Hume
-DT5  Beauty World       > BUS
+DT5  Beauty World       > BUS(future)
 DT6  King Albert Park   > CR15
 DT7  Sixth Avenue
 DT8  Tan Kah Kee
@@ -1833,12 +1848,12 @@ TE31 Sungei Bedok       > DT37 {future}`
        Service B anti-clockwise via Petir) that rejoins the same station
        rather than reaching a separate terminus. */
     name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
-    spec:`BP1  Choa Chu Kang      > NS4, JS1
+    spec:`BP1  Choa Chu Kang      > NS4, JS1, BUS
 BP2  South View
 BP3  Keat Hong
 BP4  Teck Whye
 BP5  Phoenix
-BP6  Bukit Panjang       > DT1, BT9
+BP6  Bukit Panjang       > DT1, BT9, BUS
 
 [loop at end]
 BP7  Petir
@@ -1853,7 +1868,7 @@ BP13 Senja`
     /* A "bowtie" shape — two balloon loops (East, West) both hanging off
        the single shared Sengkang station, with no tail at all. */
     name:"Sengkang LRT", code:"STC", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
-    spec:`STC  Sengkang            > NE16
+    spec:`STC  Sengkang            > NE16, BUS
 
 [loop at start]
 SE1  Compassvale

@@ -54,7 +54,11 @@ CODE  Station Name  > IC1, IC2
   auto-coloured by its line prefix (edit the `LINE_INFO` table in `app.js` to add
   more lines/prefixes). Add the reserved code `BUS` to that list to mark a
   nearby bus interchange — it renders as its own icon instead of a colour
-  caplet, and is toggled separately ("Show bus interchanges").
+  caplet, and is toggled separately ("Show bus interchanges"). If the bus
+  interchange itself doesn't exist yet, use `BUS(future)` or
+  `BUS(proposed)` instead — parens rather than the usual `{tag}` braces,
+  since a station can have its own tier tag independent of a specific bus
+  interchange's own tier.
 - Tag a station with `{sir}` to mark it as a SIR express-service stop — it
   renders with a dark outline around its own caplet instead of the usual light
   one, toggled separately ("Show SIR express stops"). Combine with a roadmap
