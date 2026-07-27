@@ -2890,17 +2890,56 @@ function fit(){
   const m = $("main");
   const avail = m.clientWidth - 60, availH = m.clientHeight - 60;
   setZoom(Math.min(1, avail / current.width, availH / current.height));
+  resetPan();
 }
 function fitWidth(){
   if (!current) return;
   const avail = $("main").clientWidth - 60;
   setZoom(Math.min(1, avail / current.width));
+  resetPan();
 }
 function fitHeight(){
   if (!current) return;
   const availH = $("main").clientHeight - 60;
   setZoom(Math.min(1, availH / current.height));
+  resetPan();
 }
+
+/* --------------------------------------------------------------------- pan
+   Click-and-drag panning, like Google Maps — the diagram is positioned by
+   a translate() driven from panX/panY rather than the container's native
+   scroll offset, so it stays independent of the sidebar's own width and
+   never yanks the current view back to the top-left when the sidebar
+   shows/hides or resizes. */
+let panX = 0, panY = 0;
+function applyPan(){
+  document.documentElement.style.setProperty("--pan-x", panX + "px");
+  document.documentElement.style.setProperty("--pan-y", panY + "px");
+}
+function resetPan(){ panX = 0; panY = 0; applyPan(); }
+(function setupPan(){
+  const mainEl = $("main");
+  let dragging = false, startX = 0, startY = 0, origX = 0, origY = 0;
+  mainEl.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
+    dragging = true;
+    mainEl.classList.add("panning");
+    startX = e.clientX; startY = e.clientY;
+    origX = panX; origY = panY;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    panX = origX + (e.clientX - startX);
+    panY = origY + (e.clientY - startY);
+    applyPan();
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    mainEl.classList.remove("panning");
+  });
+})();
 
 /* ------------------------------------------------------------------ exports */
 /* The page's @font-face points at a local fonts/ file via a <link>

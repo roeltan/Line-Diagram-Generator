@@ -29,41 +29,57 @@
   html,body{height:100%}
   body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
        background:var(--bg);color:var(--ink);overflow:hidden}
-  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);
-         border-bottom:1px solid var(--border);height:56px}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;
+         background:color-mix(in srgb, var(--panel) 40%, transparent);
+         backdrop-filter:blur(5px) saturate(1.4);-webkit-backdrop-filter:blur(5px) saturate(1.4);
+         border-bottom:1px solid var(--border);height:56px;position:relative;z-index:60}
   header h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
   header .spacer{flex:1}
   .layout{display:flex;height:calc(100% - 56px);position:relative}
+  /* The sidebar is always absolutely positioned and always its own full
+     width — it's never part of the flex flow, and its width never itself
+     animates (that's what caused the "cropping" look: shrinking width
+     reflows/clips the sidebar's own contents mid-transition). Showing and
+     hiding it is purely a transform:translateX slide, so the panel moves
+     as one solid piece; `main`'s margin-left animates in lockstep to
+     reclaim/cede the space in sync. */
   aside{width:var(--sidebar-w,440px);min-width:240px;max-width:80vw;box-sizing:border-box;
-        background:var(--panel);border-right:1px solid var(--border);
-        overflow-y:auto;padding:16px;flex:none}
-  #sidebarResizer{width:6px;flex:none;cursor:col-resize;background:transparent}
+        background:color-mix(in srgb, var(--panel) 45%, transparent);
+        backdrop-filter:blur(6px) saturate(1.4);-webkit-backdrop-filter:blur(6px) saturate(1.4);
+        border-right:1px solid var(--border);
+        overflow-y:auto;padding:16px;
+        position:absolute;left:0;top:0;bottom:0;z-index:50;
+        transform:translateX(0);transition:transform .45s cubic-bezier(.4,0,.2,1)}
+  #sidebarResizer{position:absolute;left:var(--sidebar-w,440px);top:0;bottom:0;width:10px;margin-left:-5px;
+                   cursor:col-resize;background:transparent;z-index:51;
+                   transition:left .45s cubic-bezier(.4,0,.2,1)}
   #sidebarResizer:hover,#sidebarResizer.resizing{background:var(--accent)}
   #sidebarHoverZone{display:none}
-  /* Collapsed: the sidebar leaves the flex flow (0-width) and instead sits
-     as a fixed-width overlay, translated fully offscreen — a thin hover
-     strip along the left edge (or focusing/hovering the sidebar itself,
-     once it's peeking out) slides it back into view without permanently
+  /* Collapsed: slide the sidebar fully offscreen — a thin hover strip
+     along the left edge (or focusing/hovering the sidebar itself, once
+     it's peeking out) slides it back into view without permanently
      un-collapsing it, like VS Code's auto-hide sidebar. */
-  .layout.sidebar-collapsed aside{
-    width:0;min-width:0;padding:0;border-right:0;overflow:hidden;
-    position:absolute;left:0;top:0;bottom:0;z-index:50;
-    transition:width .15s ease,padding .15s ease;
-  }
-  .layout.sidebar-collapsed aside.peeking{
-    width:var(--sidebar-w,440px);min-width:240px;padding:16px;
-    border-right:1px solid var(--border);overflow-y:auto;
-    box-shadow:0 0 28px rgba(0,0,0,.28);
-  }
+  .layout.sidebar-collapsed aside{transform:translateX(calc(-100% - 1px))}
+  .layout.sidebar-collapsed aside.peeking{transform:translateX(0);box-shadow:0 0 28px rgba(0,0,0,.28)}
   .layout.sidebar-collapsed #sidebarResizer{display:none}
   .layout.sidebar-collapsed #sidebarHoverZone{
     display:block;position:absolute;left:0;top:0;bottom:0;width:14px;z-index:49;
   }
-  main{flex:1;overflow:auto;background:
+  main{flex:1;overflow:hidden;position:relative;cursor:grab;
+       margin-left:var(--sidebar-w,440px);transition:margin-left .45s cubic-bezier(.4,0,.2,1);
+       background:
        linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%),
        linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%);
        background-size:22px 22px;background-position:0 0,11px 11px;padding:28px;display:block}
-  #stage{display:inline-block;background:var(--panel);box-shadow:var(--shadow);border-radius:4px}
+  .layout.sidebar-collapsed main{margin-left:0}
+  main.panning{cursor:grabbing}
+  /* the diagram is positioned by translate (--pan-x/--pan-y, set from JS as
+     the user drags), not scroll offset — that way panning is independent
+     of the sidebar's own width, so showing/hiding it never yanks the
+     current view back to the top-left the way a native scroll container's
+     recalculated scrollable area otherwise would. */
+  #stage{display:inline-block;background:var(--panel);box-shadow:var(--shadow);border-radius:4px;
+         transform:translate(var(--pan-x,0px),var(--pan-y,0px));will-change:transform}
   label{display:block;font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
         color:var(--muted);margin:0 0 5px}
   input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);
