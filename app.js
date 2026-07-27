@@ -1161,6 +1161,17 @@ function buildDiagram(cfg){
       for (let i = 1; i < segs.length; i++){
         if (segs[i].cd.osi || segs[i].cd.nearby) runs.push([segs[i]]); else runs[runs.length-1].push(segs[i]);
       }
+      /* connectors are drawn before the caplets (below, in SVG draw order)
+         so a caplet's rounded corner always sits cleanly on top of the
+         connector rather than the thin line overlapping onto it. */
+      for (let i = 1; i < runs.length; i++){
+        const a = runs[i-1][runs[i-1].length-1], b = runs[i][0];
+        const aFirst = a.x1 <= b.x0;
+        const gx0 = aFirst ? a.x1 : b.x1, gx1 = aFirst ? b.x0 : a.x0;
+        if (b.cd.nearby) drawNearbyConnector(el, gLabels, gx0, n.y, gx1, n.y, textColour);
+        else drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
+                               aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
+      }
       runs.forEach((run, runIdx) => {
         const rx0 = Math.min(...run.map(s => s.x0)), rx1 = Math.max(...run.map(s => s.x1));
         if (runIdx === 0) ownCapletBox = { x:rx0, y:y0, w:rx1-rx0, h };
@@ -1181,14 +1192,6 @@ function buildDiagram(cfg){
                      stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         bb.rect(rx0, y0, rx1-rx0, h);
       });
-      for (let i = 1; i < runs.length; i++){
-        const a = runs[i-1][runs[i-1].length-1], b = runs[i][0];
-        const aFirst = a.x1 <= b.x0;
-        const gx0 = aFirst ? a.x1 : b.x1, gx1 = aFirst ? b.x0 : a.x0;
-        if (b.cd.nearby) drawNearbyConnector(el, gLabels, gx0, n.y, gx1, n.y, textColour);
-        else drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
-                               aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
-      }
       codesExtent = w0 / 2;   // name sits opposite the ICs, only needs to clear the own-code segment
       farEdge = edge;
 
@@ -1199,19 +1202,32 @@ function buildDiagram(cfg){
          one with no gap (or, for an out-of-station interchange, a short
          gap bridged by a connector line). */
       let edge = n.y;
-      codes.forEach((cd, idx) => {
+      const placed = codes.map((cd, idx) => {
         const w = codeBoxW(cd.t);
-        let cy;
-        if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h }; }
+        let cy, gapStart = null;
+        if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); }
         else {
-          const gapStart = edge;
+          gapStart = edge;
           edge = edge + dir[1]*((cd.osi || cd.nearby) ? OSI_GAP : 0);
           cy = edge + dir[1]*(h/2);
-          if (cd.osi) drawOsiConnector(el, gLabels, n.x, gapStart, n.x, edge, 5, codes[idx-1].c, cd.c);
-          else if (cd.nearby) drawNearbyConnector(el, gLabels, n.x, gapStart, n.x, edge, textColour);
           edge = edge + dir[1]*h;
         }
+        return { cd, w, cy, gapStart };
+      });
+      /* connectors are drawn before the caplets (below, in SVG draw order)
+         so a caplet's rounded corner always sits cleanly on top of the
+         connector rather than the thin line overlapping onto it. */
+      placed.forEach((p, idx) => {
+        if (p.gapStart === null) return;
+        const prev = placed[idx - 1];
+        const gapEnd = p.gapStart + dir[1] * OSI_GAP;
+        if (p.cd.osi) drawOsiConnector(el, gLabels, n.x, p.gapStart, n.x, gapEnd, 5, prev.cd.c, p.cd.c);
+        else if (p.cd.nearby) drawNearbyConnector(el, gLabels, n.x, p.gapStart, n.x, gapEnd, textColour);
+      });
+      placed.forEach((p, idx) => {
+        const { cd, w, cy } = p;
         const cx = n.x;
+        if (idx === 0) ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h };
         el("path", { d:capletPath(cx - w/2, cy - h/2, w, h),
                      fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
