@@ -89,7 +89,7 @@ const STYLE = {
   lineWidth:6,
   icStroke:"#33383d",
   nameSize:14, nameWeight:600, nameFill:"#1b1f24",
-  codeSize:12, codeH:20, codeGap:14,
+  codeSize:11.5, codeH:20, codeGap:14,
   capletOutlineW:1.3,
   sirOutlineColour:"#1b1f24", sirPad:0
 };
@@ -514,7 +514,7 @@ function drawOsiConnector(el, parent, x0, y0, x1, y1, thickness, colourA, colour
    colour-blend, just a thin plain line standing the two caplets apart. */
 function drawNearbyConnector(el, parent, x0, y0, x1, y1, colour){
   el("line", { x1:x0.toFixed(2), y1:y0.toFixed(2), x2:x1.toFixed(2), y2:y1.toFixed(2),
-               stroke:colour, "stroke-width":3, "stroke-linecap":"round" }, parent);
+               stroke:colour, "stroke-width":2.5, "stroke-linecap":"round" }, parent);
 }
 
 /* -------------------------------------------------------- stadium (loop) */
@@ -2141,6 +2141,7 @@ WP24 Punggol Coast        > NE18 {proposed}`
   },
   sll:{
     name:"Seletar Line", code:"SLL", colour:"#eacd5e", layout:"horizontal",
+    spacing:80, branchSpacing:140,
     spec:`# STC proposal, not an official LTA project
 SP5  Simpang Bahru        > NC8! {proposed}
 SP4  Khatib Bongsu        {proposed}
