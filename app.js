@@ -579,7 +579,7 @@ function buildDiagram(cfg){
   const keyOf = st => (st.code || st.name || "").toUpperCase();
   const junctionKeys = new Set(branches.flatMap(b => [b.from, b.to]).filter(Boolean).map(s => s.toUpperCase()));
   const run = Math.max(sp * 1.6, 130);   // length of a branch's smooth curve / straight run near its junction
-  const hookOvershoot = Math.max(sp * 0.9, 70);   // how far a bridge branch's hook overshoots its junction before curving back — independent of `run`, tune this directly
+  const hookOvershoot = Math.max(sp * 0.75, 30);   // how far a bridge branch's hook overshoots its junction before curving back — independent of `run`, tune this directly
 
   /* A bridge branch may need more room between its "from" and "to" trunk
      stations than the trunk naturally provides for their fixed-size curves
@@ -793,10 +793,14 @@ function buildDiagram(cfg){
              height, then curve 90° again into the row — not a separate
              "outer level" detour, just one clean rounded corner at each end
              of that vertical run. */
-          const inset = Math.min(20, hookOvershoot * 0.3);
+          const hookR = curveFrom === "orthogonal" ? 40 : 100;
+          /* the short straight run feeding into the row needs to be at
+             least ~2x the corner radius itself, or `roundedPath` clamps the
+             corner down to half of whatever this segment actually is —
+             otherwise a bigger hookR here would have no visible effect. */
+          const inset = Math.min(hookR * 1.3, hookOvershoot * 0.5);
           const hookX = jn.x + growFromSgn * hookOvershoot;
           fromX = hookX + naturalSgn * inset;
-          const hookR = curveFrom === "orthogonal" ? 26 : 64;
           dFrom = roundedPath([[jn.x, jn.y], [hookX, jn.y], [hookX, by], [fromX, by]], hookR);
           bb.add(hookX, jn.y); bb.add(hookX, by);
         }
@@ -815,10 +819,10 @@ function buildDiagram(cfg){
                   `C ${F(c1x2)} ${F(by)}, ${F(c2x2)} ${F(jn2.y)}, ${F(ex2)} ${F(jn2.y)} L ${F(jn2.x)} ${F(jn2.y)}`;
           }
         } else {
-          const inset2 = Math.min(20, hookOvershoot * 0.3);
+          const hookR2 = curveTo === "orthogonal" ? 40 : 100;
+          const inset2 = Math.min(hookR2 * 1.3, hookOvershoot * 0.5);
           const hookX2 = jn2.x + naturalSgn * hookOvershoot;
           toX = hookX2 - naturalSgn * inset2;
-          const hookR2 = curveTo === "orthogonal" ? 26 : 64;
           dTo = roundedPath([[toX, by], [hookX2, by], [hookX2, jn2.y], [jn2.x, jn2.y]], hookR2);
           bb.add(hookX2, by); bb.add(hookX2, jn2.y);
         }
