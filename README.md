@@ -59,6 +59,14 @@ CODE  Station Name  > IC1, IC2
   `BUS(proposed)` instead — parens rather than the usual `{tag}` braces,
   since a station can have its own tier tag independent of a specific bus
   interchange's own tier.
+- Suffix an interchange code with `*` to mark it as an out-of-station
+  interchange (OSI) — a linked transfer at a separate paid area, rendered as
+  its own caplet standing apart from the rest, joined by a short two-colour
+  connector bar (e.g. `EW13*`).
+- Suffix an interchange code with `^` to mark it as a nearby interchange — a
+  separate, unlinked station close enough to be worth noting, but with no
+  fare-paid link at all. Renders like an OSI caplet, but joined by a plain
+  thin line instead of a colour connector (e.g. `NE3^`).
 - Tag a station with `{sir}` to mark it as a SIR express-service stop — it
   renders with a dark outline around its own caplet instead of the usual light
   one, toggled separately ("Show SIR express stops"). Combine with a roadmap

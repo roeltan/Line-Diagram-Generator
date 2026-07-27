@@ -509,6 +509,14 @@ function drawOsiConnector(el, parent, x0, y0, x1, y1, thickness, colourA, colour
   el("polygon", { points:pts([top, c2, c3, bot]), fill:colourB }, parent);
 }
 
+/* A "nearby" interchange isn't a real transfer at all — just a separate,
+   unlinked station close enough to be worth noting — so it gets no bowtie
+   colour-blend, just a thin plain line standing the two caplets apart. */
+function drawNearbyConnector(el, parent, x0, y0, x1, y1, colour){
+  el("line", { x1:x0.toFixed(2), y1:y0.toFixed(2), x2:x1.toFixed(2), y2:y1.toFixed(2),
+               stroke:colour, "stroke-width":1.5, "stroke-linecap":"round" }, parent);
+}
+
 /* -------------------------------------------------------- stadium (loop) */
 /* Arc-length parameterised rounded-rect outline — a stadium/pill whenever
    r = height/2 (the "side" edges collapse to zero length), or a genuine
@@ -1114,9 +1122,10 @@ function buildDiagram(cfg){
     if (cfg.showIc) n.ics.forEach(c => {
       if (busTier(c) !== null) return;        // a nearby bus interchange, drawn separately as an icon
       const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
-      const t = osi ? c.slice(0, -1) : c;
+      const nearby = /\^$/.test(c);           // trailing ^ marks a nearby (separate, unlinked) station
+      const t = (osi || nearby) ? c.slice(0, -1) : c;
       if (TIER_RANK[tierOfCode(t)] > cfg.tierRank) return;   // that other line doesn't exist yet at this roadmap tier
-      codes.push({ t, c:colourForCode(t, n.colour), osi });
+      codes.push({ t, c:colourForCode(t, n.colour), osi, nearby });
     });
 
     const dir = L.codeDir;
@@ -1126,7 +1135,8 @@ function buildDiagram(cfg){
     let farEdge = null;   // coordinate just past the last code, along dir's axis — where the bus icon (if any) continues from
     let ownCapletBox = null;   // bounding box of the station's own caplet — ringed separately if it's a SIR express stop
 
-    const OSI_GAP = 12;   // gap that stands an out-of-station code apart, bridged by a connector line
+    const OSI_GAP = 12;      // gap that stands an out-of-station code apart, bridged by a connector line
+    const NEARBY_GAP = 16;   // gap for a nearby (separate, unlinked) station, bridged by a thin line
 
     if (codes.length && horiz){
       /* Vertical layout: codes read left-to-right. A merged pill per
@@ -1141,7 +1151,7 @@ function buildDiagram(cfg){
       const segs = [{ cd:codes[0], x0:n.x - w0/2, x1:n.x + w0/2 }];
       let edge = growDir >= 0 ? n.x + w0/2 : n.x - w0/2;
       for (let i = 1; i < codes.length; i++){
-        const w = widths[i], gap = codes[i].osi ? OSI_GAP : 0;
+        const w = widths[i], gap = codes[i].osi ? OSI_GAP : codes[i].nearby ? NEARBY_GAP : 0;
         let sx0, sx1;
         if (growDir >= 0){ sx0 = edge + gap; sx1 = sx0 + w; edge = sx1; }
         else { sx1 = edge - gap; sx0 = sx1 - w; edge = sx0; }
@@ -1150,7 +1160,7 @@ function buildDiagram(cfg){
       const y0 = n.y - h/2;
       const runs = [[segs[0]]];
       for (let i = 1; i < segs.length; i++){
-        if (segs[i].cd.osi) runs.push([segs[i]]); else runs[runs.length-1].push(segs[i]);
+        if (segs[i].cd.osi || segs[i].cd.nearby) runs.push([segs[i]]); else runs[runs.length-1].push(segs[i]);
       }
       runs.forEach((run, runIdx) => {
         const rx0 = Math.min(...run.map(s => s.x0)), rx1 = Math.max(...run.map(s => s.x1));
@@ -1176,8 +1186,9 @@ function buildDiagram(cfg){
         const a = runs[i-1][runs[i-1].length-1], b = runs[i][0];
         const aFirst = a.x1 <= b.x0;
         const gx0 = aFirst ? a.x1 : b.x1, gx1 = aFirst ? b.x0 : a.x0;
-        drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
-                          aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
+        if (b.cd.nearby) drawNearbyConnector(el, gLabels, gx0, n.y, gx1, n.y, textColour);
+        else drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
+                               aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
       }
       codesExtent = w0 / 2;   // name sits opposite the ICs, only needs to clear the own-code segment
       farEdge = edge;
@@ -1195,9 +1206,10 @@ function buildDiagram(cfg){
         if (idx === 0){ cy = n.y; edge = n.y + dir[1]*(h/2); ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h }; }
         else {
           const gapStart = edge;
-          edge = edge + dir[1]*(cd.osi ? OSI_GAP : 0);
+          edge = edge + dir[1]*(cd.osi ? OSI_GAP : cd.nearby ? NEARBY_GAP : 0);
           cy = edge + dir[1]*(h/2);
           if (cd.osi) drawOsiConnector(el, gLabels, n.x, gapStart, n.x, edge, 5, codes[idx-1].c, cd.c);
+          else if (cd.nearby) drawNearbyConnector(el, gLabels, n.x, gapStart, n.x, edge, textColour);
           edge = edge + dir[1]*h;
         }
         const cx = n.x;
@@ -2548,7 +2560,7 @@ function makeRow(st, idx, arr){
   top.appendChild(del);
 
   const icsInp = document.createElement("input");
-  icsInp.className = "stIcs"; icsInp.placeholder = "Add-ons (e.g. EW13*, BUS)"; icsInp.value = (st.ics || []).join(", ");
+  icsInp.className = "stIcs"; icsInp.placeholder = "Add-ons (e.g. EW13*, NE3^, BUS)"; icsInp.value = (st.ics || []).join(", ");
   icsInp.oninput = () => {
     st.ics = icsInp.value.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
     syncTextFromLive(); render();
