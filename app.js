@@ -2658,18 +2658,84 @@ function makeRow(st, idx, arr){
   return row;
 }
 
+/* Small inline "Label:" tag used to prefix a field within a branch group
+   row — cheap to build, no need for a shared widget beyond this. */
+function branchFieldLabel(text){
+  const s = document.createElement("span");
+  s.className = "branchFieldLabel";
+  s.textContent = text;
+  return s;
+}
+
 function makeBranchBlock(b, bIdx){
   const wrap = document.createElement("div");
   wrap.className = "branchBlock";
+  const layoutVal = S.layout.value;
+  const isShuttle = b.mode === "shuttle";
 
-  const head = document.createElement("div");
-  head.className = "branchHead";
+  /* ---- top row: branch-wide settings, not specific to either end ---- */
+  const topRow = document.createElement("div");
+  topRow.className = "branchTopRow";
 
-  const fromLabel = document.createElement("span");
-  fromLabel.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
-  fromLabel.textContent = "from";
-  head.appendChild(fromLabel);
+  const dirSel = document.createElement("select");
+  dirSel.className = "brDir";
+  const dirOpts = layoutVal === "vertical" ? [["right","branches right"],["left","branches left"]]
+    : layoutVal === "loop" ? [["","auto (outward)"],["down","branches down"],["up","branches up"]]
+    : [["down","branches down"],["up","branches up"]];
+  dirSel.innerHTML = dirOpts.map(([v,l]) => `<option value="${v}">${l}</option>`).join("");
+  dirSel.value = b.dir || dirOpts[0][0];
+  dirSel.onchange = () => { b.dir = dirSel.value; syncTextFromLive(); render(); };
+  topRow.appendChild(dirSel);
 
+  const colourInp = document.createElement("input");
+  colourInp.type = "color"; colourInp.title = "Branch colour override";
+  colourInp.value = b.colour || S.colour.value;
+  colourInp.oninput = () => { b.colour = colourInp.value; syncTextFromLive(); render(); };
+  topRow.appendChild(colourInp);
+
+  topRow.appendChild(makeTierCheckboxes(b, () => { syncTextFromLive(); render(); }));
+
+  const delBtn = document.createElement("button");
+  delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove branch";
+  delBtn.onclick = () => { live.branches.splice(bIdx, 1); syncTextFromLive(); renderEditorRows(); render(); };
+  topRow.appendChild(delBtn);
+
+  wrap.appendChild(topRow);
+
+  /* Grow and curve selects are built identically for the start and end
+     groups — same markup, same class, so the two are guaranteed to look
+     (and size) the same, which is the opposite of how these used to be
+     two near-duplicate blocks with subtly different text/classes. Curve
+     is entirely hidden (not just disabled) once shuttle is on: it's
+     locked to orthogonal either way, and a dropdown that can't change
+     anything is more confusing than useful. */
+  const makeGrowSel = (value, onChange, withAuto) => {
+    const sel = document.createElement("select");
+    sel.className = "brGrow";
+    sel.title = withAuto ? "Which way this end's own curve first presents itself — auto follows whichever way actually reaches the other junction, no U-turn" : "";
+    sel.innerHTML = (withAuto ? `<option value="">auto</option>` : "") +
+      `<option value="right">right</option><option value="left">left</option>`;
+    sel.value = withAuto ? (value || "") : (value === "left" ? "left" : "right");
+    sel.onchange = () => { onChange(sel.value || null); syncTextFromLive(); render(); };
+    return sel;
+  };
+  const makeCurveSel = (value, onChange) => {
+    const sel = document.createElement("select");
+    sel.className = "brCurve";
+    sel.innerHTML = `<option value="smooth">Smooth curve</option><option value="orthogonal">Orthogonal turn</option>`;
+    sel.value = value || "smooth";
+    sel.onchange = () => { onChange(sel.value); syncTextFromLive(); render(); };
+    return sel;
+  };
+
+  /* ---- Start group: where the branch leaves the trunk ---- */
+  const startGroup = document.createElement("div");
+  startGroup.className = "branchGroup";
+  startGroup.appendChild(Object.assign(document.createElement("div"), { className:"branchGroupLabel", textContent:"Start" }));
+
+  const startRow = document.createElement("div");
+  startRow.className = "branchGroupRow";
+  startRow.appendChild(branchFieldLabel("From"));
   const fromSel = document.createElement("select");
   fromSel.className = "brFrom";
   fromSel.innerHTML = live.trunk.map(st => {
@@ -2678,47 +2744,35 @@ function makeBranchBlock(b, bIdx){
   }).join("");
   fromSel.value = b.from || "";
   fromSel.onchange = () => { b.from = fromSel.value; syncTextFromLive(); render(); };
-  head.appendChild(fromSel);
+  startRow.appendChild(fromSel);
 
-  const layoutVal = S.layout.value;
+  if (layoutVal !== "vertical"){
+    startRow.appendChild(branchFieldLabel("Grows"));
+    startRow.appendChild(makeGrowSel(b.grow, v => { b.grow = v; }, !!b.to));
+  }
+  if (!isShuttle){
+    startRow.appendChild(branchFieldLabel("Curve"));
+    startRow.appendChild(makeCurveSel(b.curve, v => { b.curve = v; }));
+  }
+  startGroup.appendChild(startRow);
+  wrap.appendChild(startGroup);
 
-  /* a normal branch only has one end, so its grow selector is unlabeled and
-     just sits after "from" — a bridge branch has two independent ends, so
-     each gets its own labeled grow selector plus an "auto" option (whichever
-     way actually reaches the other junction, no U-turn hook). */
-  const makeGrowSel = (label, value, onChange, isBridgeEnd) => {
-    if (layoutVal === "vertical") return null;
-    if (isBridgeEnd){
-      const lbl = document.createElement("span");
-      lbl.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
-      lbl.textContent = label;
-      head.appendChild(lbl);
-    }
-    const sel = document.createElement("select");
-    sel.className = "brGrow";
-    sel.title = isBridgeEnd ? "Which way this end's own curve first presents itself — auto follows whichever way actually reaches the other junction, no U-turn" : "";
-    sel.innerHTML = (isBridgeEnd ? `<option value="">auto</option>` : "") +
-      `<option value="right">grows right</option><option value="left">grows left</option>`;
-    sel.value = isBridgeEnd ? (value || "") : (value === "left" ? "left" : "right");
-    sel.onchange = () => { onChange(sel.value || null); syncTextFromLive(); render(); };
-    head.appendChild(sel);
-    return sel;
-  };
-
-  if (!b.to) makeGrowSel("", b.grow, v => { b.grow = v; }, false);
-  else makeGrowSel("start grows", b.grow, v => { b.grow = v; }, true);
-
-  /* bridge branch: rejoins the trunk at a second, different station
-     (Central Line Hainault Loop style) instead of dead-ending. Only
-     supported on a horizontal trunk. */
-  let toSel = null;
+  /* ---- End group: bridge branch (Central Line Hainault Loop style),
+     rejoining the trunk at a second, different station instead of
+     dead-ending. Only supported on a horizontal trunk, so the whole
+     group is absent otherwise — nothing to configure. The target
+     selector itself is always visible (it's what turns bridge mode on),
+     but its own grow/curve row only appears once a target is actually
+     picked, since there's no "end" to configure before that. */
   if (layoutVal === "horizontal"){
-    const toLabel = document.createElement("span");
-    toLabel.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
-    toLabel.textContent = "to";
-    head.appendChild(toLabel);
+    const endGroup = document.createElement("div");
+    endGroup.className = "branchGroup";
+    endGroup.appendChild(Object.assign(document.createElement("div"), { className:"branchGroupLabel", textContent:"End (bridge)" }));
 
-    toSel = document.createElement("select");
+    const targetRow = document.createElement("div");
+    targetRow.className = "branchGroupRow";
+    targetRow.appendChild(branchFieldLabel("Rejoins at"));
+    const toSel = document.createElement("select");
     toSel.className = "brTo";
     toSel.title = "Rejoin the trunk at a different station instead of dead-ending (bridge branch)";
     toSel.innerHTML = `<option value="">(dead end)</option>` + live.trunk.map(st => {
@@ -2730,99 +2784,64 @@ function makeBranchBlock(b, bIdx){
       b.to = toSel.value || null;
       syncTextFromLive(); renderEditorRows(); render();
     };
-    head.appendChild(toSel);
+    targetRow.appendChild(toSel);
+    endGroup.appendChild(targetRow);
+
+    if (b.to){
+      const endRow = document.createElement("div");
+      endRow.className = "branchGroupRow";
+      endRow.appendChild(branchFieldLabel("Grows"));
+      endRow.appendChild(makeGrowSel(b.growTo, v => { b.growTo = v; }, true));
+      if (!isShuttle){
+        endRow.appendChild(branchFieldLabel("Curve"));
+        endRow.appendChild(makeCurveSel(b.curveTo, v => { b.curveTo = v; }));
+      }
+      endGroup.appendChild(endRow);
+    }
+    wrap.appendChild(endGroup);
   }
 
-  if (b.to) makeGrowSel("end grows", b.growTo, v => { b.growTo = v; }, true);
-
-  {
-    const dirSel = document.createElement("select");
-    dirSel.className = "brDir";
-    const opts = layoutVal === "vertical" ? [["right","branches right"],["left","branches left"]]
-      : layoutVal === "loop" ? [["","auto (outward)"],["down","branches down"],["up","branches up"]]
-      : [["down","branches down"],["up","branches up"]];
-    dirSel.innerHTML = opts.map(([v,l]) => `<option value="${v}">${l}</option>`).join("");
-    dirSel.value = b.dir || opts[0][0];
-    dirSel.onchange = () => { b.dir = dirSel.value; syncTextFromLive(); render(); };
-    head.appendChild(dirSel);
-  }
-
-  const colourInp = document.createElement("input");
-  colourInp.type = "color"; colourInp.title = "Branch colour override";
-  colourInp.value = b.colour || S.colour.value;
-  colourInp.oninput = () => { b.colour = colourInp.value; syncTextFromLive(); render(); };
-  head.appendChild(colourInp);
-
-  const revBtn = document.createElement("button");
-  revBtn.type = "button"; revBtn.className = "icon"; revBtn.textContent = "⇅";
-  revBtn.title = "Reverse this branch's station order";
-  revBtn.onclick = () => reverseList(b.stations);
-  head.appendChild(revBtn);
-
-  head.appendChild(makeTierCheckboxes(b, () => { syncTextFromLive(); render(); }));
-
-  const delBtn = document.createElement("button");
-  delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove branch";
-  delBtn.onclick = () => { live.branches.splice(bIdx, 1); syncTextFromLive(); renderEditorRows(); render(); };
-  head.appendChild(delBtn);
-
-  wrap.appendChild(head);
-
-  /* shuttle mode + curve style ------------------------------------------ */
-  const opts = document.createElement("div");
-  opts.className = "branchOpts";
-
+  /* ---- shuttle ---- */
+  const shuttleRow = document.createElement("div");
+  shuttleRow.className = "branchShuttleRow";
   const shuttleChk = document.createElement("label");
   shuttleChk.className = "chk";
   const shuttleCb = document.createElement("input");
-  shuttleCb.type = "checkbox"; shuttleCb.checked = b.mode === "shuttle";
+  shuttleCb.type = "checkbox"; shuttleCb.checked = isShuttle;
   shuttleChk.appendChild(shuttleCb);
   shuttleChk.appendChild(document.createTextNode(" Shuttle"));
-  if (b.to) shuttleChk.title = "Locks both ends to an orthogonal turn, like a stub shuttle";
-  opts.appendChild(shuttleChk);
+  shuttleChk.title = "Locks both ends to an orthogonal turn, like a stub shuttle";
+  shuttleRow.appendChild(shuttleChk);
 
   const labelInp = document.createElement("input");
   labelInp.type = "text"; labelInp.className = "brShuttleLabel";
   labelInp.placeholder = "Caplet (e.g. CP1)";
   labelInp.value = b.shuttleLabel || "";
-  labelInp.style.display = b.mode === "shuttle" ? "" : "none";
+  labelInp.style.display = isShuttle ? "" : "none";
   labelInp.oninput = () => { b.shuttleLabel = labelInp.value.trim(); syncTextFromLive(); render(); };
-  opts.appendChild(labelInp);
+  shuttleRow.appendChild(labelInp);
 
-  const curveSel = document.createElement("select");
-  curveSel.className = "brCurve";
-  curveSel.title = b.to ? "Curve style for the start (\"from\") end" : "";
-  curveSel.innerHTML = `<option value="smooth">${b.to ? "Smooth curve (start)" : "Smooth curve"}</option><option value="orthogonal">${b.to ? "Orthogonal turn (start)" : "Orthogonal turn"}</option>`;
-  curveSel.value = b.curve || "smooth";
-  curveSel.disabled = b.mode === "shuttle";
-  curveSel.onchange = () => { b.curve = curveSel.value; syncTextFromLive(); render(); };
-  opts.appendChild(curveSel);
-
-  let curveToSel = null;
-  if (b.to){
-    curveToSel = document.createElement("select");
-    curveToSel.className = "brCurveTo";
-    curveToSel.title = "Curve style for the end (\"to\") end";
-    curveToSel.innerHTML = `<option value="smooth">Smooth curve (end)</option><option value="orthogonal">Orthogonal turn (end)</option>`;
-    curveToSel.value = b.curveTo || "smooth";
-    curveToSel.disabled = b.mode === "shuttle";
-    curveToSel.onchange = () => { b.curveTo = curveToSel.value; syncTextFromLive(); render(); };
-    opts.appendChild(curveToSel);
-  }
-
+  /* toggling shuttle shows/hides the curve selects entirely (not just
+     enables/disables them), which means the block needs a full rebuild
+     rather than an in-place tweak — same pattern already used by the
+     bridge target select above, for the same reason. */
   shuttleCb.onchange = () => {
     b.mode = shuttleCb.checked ? "shuttle" : "split";
     if (b.mode === "shuttle"){ b.curve = "orthogonal"; b.curveTo = "orthogonal"; }
-    labelInp.style.display = shuttleCb.checked ? "" : "none";
-    curveSel.disabled = shuttleCb.checked;
-    curveSel.value = b.curve || "smooth";
-    if (curveToSel){
-      curveToSel.disabled = shuttleCb.checked;
-      curveToSel.value = b.curveTo || "smooth";
-    }
-    syncTextFromLive(); render();
+    syncTextFromLive(); renderEditorRows(); render();
   };
-  wrap.appendChild(opts);
+  wrap.appendChild(shuttleRow);
+
+  /* ---- stations ---- */
+  const stationsHead = document.createElement("div");
+  stationsHead.className = "branchStationsHead";
+  stationsHead.appendChild(Object.assign(document.createElement("span"), { className:"branchGroupLabel", textContent:"Stations" }));
+  const revBtn = document.createElement("button");
+  revBtn.type = "button"; revBtn.className = "icon"; revBtn.textContent = "⇅ Reverse";
+  revBtn.title = "Reverse this branch's station order";
+  revBtn.onclick = () => reverseList(b.stations);
+  stationsHead.appendChild(revBtn);
+  wrap.appendChild(stationsHead);
 
   const rows = document.createElement("div");
   rows.className = "rowList branchRows";

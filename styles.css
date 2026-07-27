@@ -244,22 +244,36 @@
   .addBtn:hover{border-color:var(--accent);color:var(--accent);border-style:solid}
   .branchBlock{border:1px solid var(--border);border-radius:9px;padding:10px;margin-bottom:12px;
                background:color-mix(in srgb, var(--muted) 4%, transparent)}
-  .branchHead{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-  .branchHead select{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--field);
-                      font-size:12px;color:var(--ink);width:auto}
-  .branchHead input[type=color]{width:32px;height:30px;padding:2px}
-  .branchOpts{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:-2px 0 8px}
-  .branchOpts .chk{margin:0}
+  /* Branch-wide settings (which side it sits on, colour, roadmap tier,
+     delete) — not specific to either end, so they get their own row up
+     top rather than being interleaved with the start/end fields below. */
+  .branchTopRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px}
+  .branchTopRow input[type=color]{width:32px;height:30px;padding:2px;flex:none}
+  /* Start/End are visually grouped sub-sections — a small uppercase label
+     followed by that end's own fields — so e.g. "from" + its own grow/curve
+     controls read as one unit instead of being scattered across the block
+     alongside unrelated branch-wide settings. The End group only renders
+     at all on a horizontal trunk (bridge branches aren't supported
+     elsewhere), and its grow/curve row only appears once a bridge target
+     is actually chosen — nothing to configure on an end that doesn't exist. */
+  .branchGroup{margin-bottom:10px}
+  .branchGroupLabel{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+                     color:var(--muted);margin:0 0 6px}
+  .branchGroupRow{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-bottom:6px}
+  .branchGroupRow:last-child{margin-bottom:0}
+  .branchFieldLabel{font-size:11px;color:var(--muted);white-space:nowrap}
+  .branchTopRow select, .branchGroupRow select{padding:6px 8px;border:1px solid var(--border);border-radius:6px;
+                      background:var(--field);font-size:12px;color:var(--ink)}
+  /* Grow and curve selects are reused verbatim for both the start and end
+     groups (same markup, same class) — previously the end's curve select
+     had its own separate, unstyled class and slightly different option
+     text, which is exactly what made the two look inconsistently sized. */
+  .brGrow, .brCurve{width:140px;flex:none}
+  .branchShuttleRow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px}
+  .branchShuttleRow .chk{margin:0}
   .brShuttleLabel{width:130px;flex:none;padding:6px 8px;border:1px solid var(--border);border-radius:6px;
                    background:var(--field);color:var(--ink);font-size:12px}
-  /* .brCurveTo (the bridge branch's "end" curve-style select) previously had
-     no matching rule at all, so it fell back to the bare browser default
-     look — and even styled, `width:auto` let the two selects size
-     differently since "(start)"/"(end)" option text isn't the same length.
-     Both now share one rule with a fixed width so they line up. */
-  .brCurve, .brCurveTo{padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--field);
-           font-size:12px;color:var(--ink);width:170px;flex:none}
-  .brCurve:disabled, .brCurveTo:disabled{opacity:.5}
+  .branchStationsHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
   .branchDel{flex:none;border:1px solid var(--border);border-radius:6px;background:var(--field);
              color:var(--muted);padding:5px 8px;font-size:11px}
   .branchDel:hover{color:#c0392b;border-color:#c0392b}
