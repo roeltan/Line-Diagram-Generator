@@ -219,6 +219,15 @@ absorbed into a different line by the time the proposed tier is reached:
 This branch renders at Current and Future, then disappears at Proposed.
 Combine tags with a comma, e.g. `{proposed,sir}` or `{future,until:proposed}`.
 
+The **Editor** exposes all of this directly too — every station row, branch
+block, and loop block has its own **C**/**F**/**P** checkboxes (Current/
+Future/Proposed) showing which roadmap tiers it currently renders at, no
+need to hand-write `{tag}` syntax. Since `tier`/`until` are really just one
+contiguous range (a start tier and an optional end tier), ticking a
+non-contiguous combination — Current and Proposed but not Future — isn't
+representable and collapses to the smallest range covering everything
+ticked (Current through Proposed, in that example).
+
 A station's interchange codes (after `>`) are filtered by the *other* line's
 own tier too, independent of the host station's tag — e.g. a real, open-today
 station can list a Cross Island Line cross-reference that only appears once

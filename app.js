@@ -2259,6 +2259,55 @@ function tagSuffix(tier, sir, until){
   if (until) parts.push(`until:${until}`);
   return parts.length ? ` {${parts.join(",")}}` : "";
 }
+
+/* Translates a station/branch/loop's tier+until pair into "which roadmap
+   tiers does this show at" checkbox states (current/future/proposed) and
+   back — tier+until is really just a single contiguous range (a start
+   tier and an optional end tier), so a non-contiguous checkbox pattern
+   (e.g. current+proposed ticked but not future) collapses to the smallest
+   contiguous range spanning every ticked box when converted back. */
+const TIER_NAMES = ["current", "future", "proposed"];
+function tierCheckboxState(item){
+  const startRank = TIER_RANK[item.tier || "current"] ?? 0;
+  const endRank = item.until ? (TIER_RANK[item.until] ?? 2) : 2;
+  return TIER_NAMES.map((_, r) => r >= startRank && r <= endRank);
+}
+function applyTierCheckboxes(item, checked){
+  const ranks = [0, 1, 2].filter(r => checked[r]);
+  if (!ranks.length) ranks.push(0, 1, 2);   // can't represent "never shows" — falls back to "always shows" instead
+  const minR = Math.min(...ranks), maxR = Math.max(...ranks);
+  item.tier = minR === 0 ? null : TIER_NAMES[minR];
+  item.until = maxR === 2 ? null : TIER_NAMES[maxR];
+}
+/* A compact set of 3 checkboxes (Current/Future/Proposed) controlling
+   which roadmap tiers a station/branch/loop shows at — shared by the
+   Editor's station rows, branch blocks, and loop blocks. `onChange` fires
+   after the item's own tier/until fields are updated. */
+function makeTierCheckboxes(item, onChange){
+  const wrap = document.createElement("span");
+  wrap.className = "tierChecks";
+  const boxes = TIER_NAMES.map(name => {
+    const lbl = document.createElement("label");
+    lbl.className = "tierChk";
+    lbl.title = name.charAt(0).toUpperCase() + name.slice(1);
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(name.charAt(0).toUpperCase()));
+    wrap.appendChild(lbl);
+    return cb;
+  });
+  const sync = () => tierCheckboxState(item).forEach((v, i) => { boxes[i].checked = v; });
+  sync();
+  boxes.forEach(cb => {
+    cb.onchange = () => {
+      applyTierCheckboxes(item, boxes.map(b => b.checked));
+      sync();
+      onChange();
+    };
+  });
+  return wrap;
+}
 function stLineText(st){
   const code = (st.code || "").trim(), name = (st.name || "").trim();
   let s = code ? (name ? `${code} | ${name}` : code) : name;
@@ -2470,6 +2519,8 @@ function makeRow(st, idx, arr){
   };
   row.appendChild(icsInp);
 
+  row.appendChild(makeTierCheckboxes(st, () => { syncTextFromLive(); render(); }));
+
   const del = document.createElement("button");
   del.type = "button"; del.className = "rowDel"; del.textContent = "✕"; del.title = "Delete station";
   del.onclick = () => { arr.splice(idx, 1); syncTextFromLive(); renderEditorRows(); render(); };
@@ -2596,6 +2647,8 @@ function makeBranchBlock(b, bIdx){
   revBtn.onclick = () => reverseList(b.stations);
   head.appendChild(revBtn);
 
+  head.appendChild(makeTierCheckboxes(b, () => { syncTextFromLive(); render(); }));
+
   const delBtn = document.createElement("button");
   delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove branch";
   delBtn.onclick = () => { live.branches.splice(bIdx, 1); syncTextFromLive(); renderEditorRows(); render(); };
@@ -2702,6 +2755,8 @@ function makeLoopBlock(lp, lpIdx){
   revBtn.title = "Reverse this loop's station order";
   revBtn.onclick = () => reverseList(lp.stations);
   head.appendChild(revBtn);
+
+  head.appendChild(makeTierCheckboxes(lp, () => { syncTextFromLive(); render(); }));
 
   const delBtn = document.createElement("button");
   delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove loop";
