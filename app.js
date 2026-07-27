@@ -1390,6 +1390,18 @@ function buildDiagram(cfg){
     pushLegend((info && info.name) || code || "Line", (info && info.colour) || colour, (info && info.acr) || prefix);
   }));
 
+  /* the diagram's own line (if pushed) always leads the legend; every other
+     line follows the same enforced precedence used everywhere else
+     (Interchange colours editor, preset menu) rather than first-seen order.
+     Array.sort is stable, so lines absent from that order (rank Infinity)
+     keep their original relative order at the end instead of shuffling. */
+  if (legendItems.length > 1){
+    const hasOwnLine = !!(cfg.name || cfg.code);
+    const head = hasOwnLine ? legendItems.slice(0, 1) : [];
+    const rest = legendItems.slice(hasOwnLine ? 1 : 0).sort((a, b) => lineOrderRank(a.acr) - lineOrderRank(b.acr));
+    legendItems.splice(0, legendItems.length, ...head, ...rest);
+  }
+
   if (cfg.showLegend && (legendItems.length > 1 || (legendItems.length === 1 && cfg.code))){
     /* Caplets here match the diagram's own caplet proportions (same height
        and text size), just scaled to the legend's own label text size. */
@@ -1558,12 +1570,23 @@ function renderLineInfoRows(){
     group.prefixes.forEach(p => Object.assign(LINE_INFO[p], patch));
   };
 
-  [...groups.values()].sort((a, b) => (a.name || "").localeCompare(b.name || "")).forEach(group => {
+  reconcileLineOrder([...groups.values()].map(g => g.acr));
+
+  [...groups.values()].sort((a, b) => {
+    const r = lineOrderRank(a.acr) - lineOrderRank(b.acr);
+    return r !== 0 ? r : (a.name || "").localeCompare(b.name || "");
+  }).forEach(group => {
     const box = document.createElement("div");
     box.className = "liGroup";
+    box.draggable = true;
 
     const head = document.createElement("div");
     head.className = "liRow";
+
+    const handle = document.createElement("span");
+    handle.className = "dragHandle"; handle.title = "Drag to reorder";
+    handle.textContent = "⋮⋮";
+    head.appendChild(handle);
 
     const nameInp = document.createElement("input");
     nameInp.className = "liName"; nameInp.placeholder = "Line name"; nameInp.value = group.name || "";
@@ -1616,6 +1639,31 @@ function renderLineInfoRows(){
     box.appendChild(chips);
 
     container.appendChild(box);
+
+    /* drag-to-reorder — same dragCtx pattern as the station rows, just
+       operating on `lineOrder` (an array of acr strings) instead of a
+       station-list array. Reference equality on `.arr` keeps a
+       station-row drag and a line-order drag from ever completing
+       against each other. */
+    box.addEventListener("dragstart", () => {
+      dragCtx = { arr:lineOrder, idx:lineOrder.indexOf(group.acr) };
+      box.classList.add("dragging");
+    });
+    box.addEventListener("dragend", () => box.classList.remove("dragging"));
+    box.addEventListener("dragover", e => {
+      if (dragCtx && dragCtx.arr === lineOrder){ e.preventDefault(); box.classList.add("dragover"); }
+    });
+    box.addEventListener("dragleave", () => box.classList.remove("dragover"));
+    box.addEventListener("drop", e => {
+      e.preventDefault(); box.classList.remove("dragover");
+      if (!dragCtx || dragCtx.arr !== lineOrder) return;
+      const from = dragCtx.idx, to = lineOrder.indexOf(group.acr);
+      dragCtx = null;
+      if (from === -1 || to === -1 || from === to) return;
+      const [moved] = lineOrder.splice(from, 1);
+      lineOrder.splice(to, 0, moved);
+      renderLineInfoRows(); render();
+    });
   });
 }
 
@@ -1633,8 +1681,8 @@ function renderLineInfoRows(){
    make sense alongside the rest of the speculative "Proposed" content. */
 const PRESET_GROUPS = [
   { name:"Current", items:[
-    { key:"ns", acr:"NSL", label:"North-South Line",  colour:"#d42e12", tier:"current" },
     { key:"ew", acr:"EWL", label:"East-West Line",     colour:"#009645", tier:"current" },
+    { key:"ns", acr:"NSL", label:"North-South Line",  colour:"#d42e12", tier:"current" },
     { key:"ne", acr:"NEL", label:"North East Line",    colour:"#9900aa", tier:"current" },
     { key:"cc", acr:"CCL", label:"Circle Line",        colour:"#fa9e0d", tier:"current" },
     { key:"dt", acr:"DTL", label:"Downtown Line",      colour:"#005ec4", tier:"current" },
@@ -1662,6 +1710,40 @@ const PRESET_GROUPS = [
     { key:"blank", acr:"—", label:"Blank template", colour:"#8a9099", tier:"current" }
   ]}
 ];
+/* Default precedence for line ordering — EWL, NSL, NEL, CCL, DTL, TEL, then
+   the LRTs, then future-tier lines, then proposed-tier ones — reusing the
+   preset menu's own group order as the one source of truth rather than
+   maintaining a second, parallel list that could drift out of sync. This
+   is only the SEED/fallback though: `lineOrder` below is the live, user
+   -reorderable list (drag handles in the "Interchange colours" editor)
+   that actually governs display order everywhere; this map just decides
+   where a not-yet-seen line lands the first time it shows up. */
+const DEFAULT_LINE_ORDER_RANK = new Map();
+PRESET_GROUPS.forEach(g => g.items.forEach(it => {
+  if (it.acr && !DEFAULT_LINE_ORDER_RANK.has(it.acr)) DEFAULT_LINE_ORDER_RANK.set(it.acr, DEFAULT_LINE_ORDER_RANK.size);
+}));
+const defaultLineOrderRank = acr => DEFAULT_LINE_ORDER_RANK.has(acr) ? DEFAULT_LINE_ORDER_RANK.get(acr) : Infinity;
+
+/* The live, user-editable line order — an array of `acr` strings — used to
+   sort both the "Interchange colours" editor rows and a diagram's own
+   legend (after its own line, which always comes first) instead of a
+   plain alphabetical/first-seen order. Persisted alongside LINE_INFO
+   (snapshotConfig/save/export), reordered via drag handles in the editor. */
+let lineOrder = [...DEFAULT_LINE_ORDER_RANK.keys()];
+/* Keeps `lineOrder` in sync with whatever lines currently exist in
+   LINE_INFO — drops any that were deleted, and appends any newly-added
+   ones (a fresh custom line, or one from a just-loaded preset) at their
+   default-precedence position rather than always shoving them to the very
+   end, while leaving the user's own drag-reordering of existing lines
+   untouched. */
+function reconcileLineOrder(acrs){
+  const present = new Set(acrs);
+  lineOrder = lineOrder.filter(a => present.has(a));
+  const known = new Set(lineOrder);
+  const newOnes = acrs.filter(a => !known.has(a)).sort((a, b) => defaultLineOrderRank(a) - defaultLineOrderRank(b));
+  lineOrder.push(...newOnes);
+}
+const lineOrderRank = acr => { const i = lineOrder.indexOf(acr); return i === -1 ? Infinity : i; };
 
 const EXAMPLES = {
   ns:{
@@ -2156,7 +2238,7 @@ SL9  Farrer Park          > NE8 {proposed}
 SL10 Selegie              > DT13^, DT22^ {proposed}
 SL11 Esplanade            > HL16* {proposed}
 SL12 Raffles Place        > NS26^, EW14 {proposed}
-SL13 Straits View         > DT17, TE19 {proposed}
+SL13 Straits View         > DT17^, TE19^ {proposed}
 SL14 Prince Edward Road   > CC1 {proposed}
 SL15 Southern Central     > WP10! {proposed}
 SL16 Brani Resort         > NW10 {proposed}
@@ -2518,6 +2600,7 @@ function applyConfig(c){
     for (const k in LINE_INFO) delete LINE_INFO[k];
     Object.assign(LINE_INFO, c.lineInfo);
   }
+  if (Array.isArray(c.lineOrder)) lineOrder = c.lineOrder.slice();
   renderLineInfoRows();
   const errors = setLiveFromText(c.spec || "");
   syncTextFromLive();
@@ -3173,7 +3256,7 @@ function snapshotConfig(){
     showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked, showSir:S.showSir.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
-    lineInfo:LINE_INFO
+    lineInfo:LINE_INFO, lineOrder:lineOrder
   };
 }
 function save(){
