@@ -772,13 +772,6 @@ function buildDiagram(cfg){
         const growToSgn = b.growTo === "left" ? -1 : b.growTo === "right" ? 1 : naturalSgn;
         const curveFrom = b.curve || "smooth";
         const curveTo = b.curveTo || "smooth";
-        /* the hook's outer level sits exactly halfway between the row and
-           the trunk baseline, so both of its vertical legs are equal —
-           putting it at a fixed offset from the row instead made one leg
-           (row to outer level) much shorter than the other (outer level
-           all the way down to the trunk), producing a lopsided loop
-           instead of a clean symmetric hook. */
-        const by2 = (by + jn.y) / 2;
 
         let fromX, dFrom;
         if (growFromSgn === naturalSgn){
@@ -794,10 +787,17 @@ function buildDiagram(cfg){
                     `C ${F(c1x)} ${F(jn.y)}, ${F(c2x)} ${F(by)}, ${F(ex)} ${F(by)} L ${F(fromX)} ${F(by)}`;
           }
         } else {
-          fromX = jn.x + growFromSgn * run;
+          /* right half of a rounded rectangle: overshoot the junction, curve
+             90° into a single straight run spanning the full row-to-trunk
+             height, then curve 90° again into the row — not a separate
+             "outer level" detour, just one clean rounded corner at each end
+             of that vertical run. */
+          const inset = Math.min(20, run * 0.3);
+          const hookX = jn.x + growFromSgn * run;
+          fromX = hookX + naturalSgn * inset;
           const hookR = curveFrom === "orthogonal" ? 26 : 64;
-          dFrom = roundedPath([[jn.x, jn.y], [jn.x, by2], [fromX, by2], [fromX, by]], hookR);
-          bb.add(jn.x, by2); bb.add(fromX, by2);
+          dFrom = roundedPath([[jn.x, jn.y], [hookX, jn.y], [hookX, by], [fromX, by]], hookR);
+          bb.add(hookX, jn.y); bb.add(hookX, by);
         }
 
         let toX, dTo;
@@ -814,10 +814,12 @@ function buildDiagram(cfg){
                   `C ${F(c1x2)} ${F(by)}, ${F(c2x2)} ${F(jn2.y)}, ${F(ex2)} ${F(jn2.y)} L ${F(jn2.x)} ${F(jn2.y)}`;
           }
         } else {
-          toX = jn2.x + naturalSgn * run;
+          const inset2 = Math.min(20, run * 0.3);
+          const hookX2 = jn2.x + naturalSgn * run;
+          toX = hookX2 - naturalSgn * inset2;
           const hookR2 = curveTo === "orthogonal" ? 26 : 64;
-          dTo = roundedPath([[toX, by], [toX, by2], [jn2.x, by2], [jn2.x, jn2.y]], hookR2);
-          bb.add(jn2.x, by2); bb.add(toX, by2);
+          dTo = roundedPath([[toX, by], [hookX2, by], [hookX2, jn2.y], [jn2.x, jn2.y]], hookR2);
+          bb.add(hookX2, by); bb.add(hookX2, jn2.y);
         }
 
         const n = b.stations.length;
