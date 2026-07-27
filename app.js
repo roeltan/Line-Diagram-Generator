@@ -312,7 +312,7 @@ function parseSpec(text){
       const dir = dirUD || dirLR;   // which side: up/down (horizontal), left/right (vertical)
       const grow = dirLR;          // which way branch stations grow: left/right (horizontal & loop only)
 
-      if (mode === "shuttle") curve = "orthogonal";   // shuttle tracks are always orthogonal
+      if (mode === "shuttle"){ curve = "orthogonal"; curveTo = "orthogonal"; }   // shuttle tracks are always orthogonal, both ends for a bridge branch
       const b = { from, to, dir, grow, growTo, mode, shuttleLabel, curve, curveTo, colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
       branches.push(b);
       cursor = b.stations;
@@ -571,16 +571,62 @@ function buildDiagram(cfg){
   /* For horizontal/loop layouts, both trunk gaps flanking a junction station
      are widened to 1.5x, so the branch's own curve has room to come off
      cleanly instead of cramming into a normal-width gap — always split
-     evenly on both sides regardless of which way the branch grows.
+     evenly on both sides regardless of which way the branch grows. A bridge
+     branch's "to" station is just as much a junction as its "from" one, so
+     it gets the same treatment on both its own flanking gaps.
      `gapUnits[i]` is 1 or 1.5, the size (in multiples of `sp`) of the gap
      AFTER trunk station i (wrapping around for loops). */
   const keyOf = st => (st.code || st.name || "").toUpperCase();
-  const junctionKeys = new Set(branches.map(b => b.from.toUpperCase()));
+  const junctionKeys = new Set(branches.flatMap(b => [b.from, b.to]).filter(Boolean).map(s => s.toUpperCase()));
+  const run = Math.max(sp * 1.6, 130);   // length of a branch's smooth curve / straight run near its junction
+
+  /* A bridge branch may need more room between its "from" and "to" trunk
+     stations than the trunk naturally provides for their fixed-size curves
+     and own stations to fit without crossing — rather than let the curves
+     overlap, or stretch the rejoining curve to fit, the trunk itself grows:
+     extra whole station-pitch gaps get inserted between the two junctions
+     (preferring the gaps strictly between them, over the two 1.5x junction
+     gaps themselves, whenever there's room to leave those alone), so every
+     other trunk station stays right on the sp grid. Horizontal trunks only —
+     bridge branches aren't supported elsewhere. */
+  const bridgeExtraGaps = new Map();   // trunk gap-index -> extra whole-sp units
+  if (cfg.layout === "horizontal"){
+    branches.forEach(b => {
+      if (!b.to || !b.stations.length) return;
+      const fromKey = (b.from || "").toUpperCase(), toKey = b.to.toUpperCase();
+      const fromIdx = trunk.findIndex(st => keyOf(st) === fromKey);
+      const toIdx = trunk.findIndex(st => keyOf(st) === toKey);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+      const loIdx = Math.min(fromIdx, toIdx), hiIdx = Math.max(fromIdx, toIdx);
+      let naturalSpan = 0;
+      for (let gi = loIdx; gi < hiIdx; gi++){
+        const curKey = keyOf(trunk[gi]), nextKey = keyOf(trunk[gi + 1]);
+        naturalSpan += (junctionKeys.has(curKey) || junctionKeys.has(nextKey)) ? 1.5 : 1;
+      }
+      naturalSpan *= sp;
+      const n = b.stations.length;
+      const neededSpan = 2 * run + (n - 1) * sp + sp * 0.5;   // small straight buffer so the curves never quite touch
+      const shortfall = neededSpan - naturalSpan;
+      if (shortfall <= 0) return;
+      const extraUnits = Math.ceil(shortfall / sp);
+      let targetGaps = [];
+      for (let gi = loIdx + 1; gi < hiIdx - 1; gi++) targetGaps.push(gi);
+      if (!targetGaps.length) for (let gi = loIdx; gi < hiIdx; gi++) targetGaps.push(gi);
+      const base = Math.floor(extraUnits / targetGaps.length);
+      const remainder = extraUnits % targetGaps.length;
+      targetGaps.forEach((gi, idx) => {
+        const add = base + (idx < remainder ? 1 : 0);
+        bridgeExtraGaps.set(gi, Math.max(bridgeExtraGaps.get(gi) || 0, add));
+      });
+    });
+  }
+
   const gapAfter = (i, wrap) => {
     const j = wrap ? (i + 1) % trunk.length : i + 1;
     if (j >= trunk.length || j < 0) return 1;
     const curKey = keyOf(trunk[i]), nextKey = keyOf(trunk[j]);
-    return (junctionKeys.has(curKey) || junctionKeys.has(nextKey)) ? 1.5 : 1;
+    const base = (junctionKeys.has(curKey) || junctionKeys.has(nextKey)) ? 1.5 : 1;
+    return base + (bridgeExtraGaps.get(i) || 0);
   };
 
   if (cfg.layout === "loop"){
@@ -668,7 +714,6 @@ function buildDiagram(cfg){
     const jn = nodes[j];
     const bc = b.colour || colour;
     const gap = branchGap;
-    const run = Math.max(sp * 1.6, 130);   // length of the smooth curve / straight run near the junction
     const shuttle = b.mode === "shuttle";
     const F = v => v.toFixed(2);
 
@@ -727,8 +772,13 @@ function buildDiagram(cfg){
         const growToSgn = b.growTo === "left" ? -1 : b.growTo === "right" ? 1 : naturalSgn;
         const curveFrom = b.curve || "smooth";
         const curveTo = b.curveTo || "smooth";
-        const hookGap = Math.max(sp * 0.5, 32);
-        const by2 = by + sgn * hookGap;
+        /* the hook's outer level sits exactly halfway between the row and
+           the trunk baseline, so both of its vertical legs are equal —
+           putting it at a fixed offset from the row instead made one leg
+           (row to outer level) much shorter than the other (outer level
+           all the way down to the trunk), producing a lopsided loop
+           instead of a clean symmetric hook. */
+        const by2 = (by + jn.y) / 2;
 
         let fromX, dFrom;
         if (growFromSgn === naturalSgn){
@@ -2174,7 +2224,7 @@ function branchHeaderText(b){
   if (b.curve === "orthogonal" && b.mode !== "shuttle") s += " orthogonal";
   if (b.to){
     if (b.growTo) s += ` growTo:${b.growTo}`;
-    if (b.curveTo === "orthogonal") s += " curveTo:orthogonal";
+    if (b.curveTo === "orthogonal" && b.mode !== "shuttle") s += " curveTo:orthogonal";
   }
   if (b.colour) s += `: ${b.colour}`;
   s += "]";
@@ -2510,10 +2560,9 @@ function makeBranchBlock(b, bIdx){
   shuttleChk.className = "chk";
   const shuttleCb = document.createElement("input");
   shuttleCb.type = "checkbox"; shuttleCb.checked = b.mode === "shuttle";
-  shuttleCb.disabled = !!b.to;
   shuttleChk.appendChild(shuttleCb);
   shuttleChk.appendChild(document.createTextNode(" Shuttle"));
-  if (b.to) shuttleChk.title = "Not available for bridge branches";
+  if (b.to) shuttleChk.title = "Locks both ends to an orthogonal turn, like a stub shuttle";
   opts.appendChild(shuttleChk);
 
   const labelInp = document.createElement("input");
@@ -2540,16 +2589,21 @@ function makeBranchBlock(b, bIdx){
     curveToSel.title = "Curve style for the end (\"to\") end";
     curveToSel.innerHTML = `<option value="smooth">Smooth curve (end)</option><option value="orthogonal">Orthogonal turn (end)</option>`;
     curveToSel.value = b.curveTo || "smooth";
+    curveToSel.disabled = b.mode === "shuttle";
     curveToSel.onchange = () => { b.curveTo = curveToSel.value; syncTextFromLive(); render(); };
     opts.appendChild(curveToSel);
   }
 
   shuttleCb.onchange = () => {
     b.mode = shuttleCb.checked ? "shuttle" : "split";
-    if (b.mode === "shuttle") b.curve = "orthogonal";
+    if (b.mode === "shuttle"){ b.curve = "orthogonal"; b.curveTo = "orthogonal"; }
     labelInp.style.display = shuttleCb.checked ? "" : "none";
     curveSel.disabled = shuttleCb.checked;
     curveSel.value = b.curve || "smooth";
+    if (curveToSel){
+      curveToSel.disabled = shuttleCb.checked;
+      curveToSel.value = b.curveTo || "smooth";
+    }
     syncTextFromLive(); render();
   };
   wrap.appendChild(opts);

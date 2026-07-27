@@ -102,9 +102,9 @@ Its own stations use the same fixed pitch as everywhere else in the
 diagram, so a bridge branch with enough stations naturally overshoots past
 the "to" station and curves back to meet it — same as the real Hainault
 Loop extends further out than the direct trunk distance. Only supported on
-a horizontal trunk (shuttle mode isn't available for a bridge branch
-either) — elsewhere it falls back to a normal dead-end branch with a
-warning.
+a horizontal trunk — elsewhere it falls back to a normal dead-end branch
+with a warning. Both the `from` and `to` stations get the same 1.5x
+flanking-gap treatment a normal branch junction gets, on both sides.
 
 Each end has its own independent grow direction and curve style, same as a
 normal branch — `left`/`right` right after the `from` code sets the start
@@ -119,14 +119,17 @@ doubling back to become the row — like a small U-turn off the trunk:
 [branch from CL4 to CL2 up growTo:left]
 ```
 
+Marking a bridge branch `shuttle` (`[branch from CL4 to CL2 up shuttle]`)
+locks both ends to an orthogonal turn, same as a normal stub shuttle.
+
 Both ends always use the same fixed curve size regardless of station
-count or how far apart the two junctions are — the straight middle
-section (where the stations sit) stretches or shrinks to take up whatever
-room is left, rather than the curves themselves growing long and thin.
-When the two junctions are close together relative to that fixed curve
-size, both ends' curves can end up overlapping/crossing rather than
-sitting side by side — space them further apart (or add more branch
-spacing) if that happens.
+count — the straight middle section (where the stations sit) stretches or
+shrinks to take up whatever room is left, rather than the curves
+themselves growing long and thin. If the two junctions don't naturally
+have enough room between them for that, the trunk itself grows to fit:
+extra whole station-pitch gaps get inserted between them (preferring the
+gaps strictly between the two junctions over their own 1.5x gaps, so
+everything else stays right on the station-spacing grid).
 
 ### Loop shape
 
