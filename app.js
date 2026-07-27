@@ -37,7 +37,7 @@ const LINE_INFO = {
   RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS", tier:"future" },
   HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL", tier:"proposed" },
   WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR", tier:"proposed" },
-  SL:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL", tier:"proposed" }, SP:{ name:"Seletar Line", colour:"#f9cb9c", acr:"SLL", tier:"proposed" },
+  SL:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" }, SP:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" },
   BT:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" }, BE:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" },
   ER:{ name:"Eastern Region Line", colour:"#cc2680", acr:"ERL", tier:"proposed" },
   NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL", tier:"proposed" },
@@ -1596,7 +1596,7 @@ const PRESET_GROUPS = [
   { name:"Proposed", items:[
     { key:"hll", acr:"HLL", label:"Holland-Long Island Line", colour:"#e8467c", tier:"proposed" },
     { key:"wpr", acr:"WPR", label:"West Coast-Punggol Railway", colour:"#c7a173", tier:"proposed" },
-    { key:"sll", acr:"SLL", label:"Seletar Line", colour:"#f9cb9c", tier:"proposed" },
+    { key:"sll", acr:"SLL", label:"Seletar Line", colour:"#eacd5e", tier:"proposed" },
     { key:"btr", acr:"BTR", label:"Bukit Timah Railway", colour:"#ed5e0c", tier:"proposed" },
     { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680", tier:"proposed" },
     { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000", tier:"proposed" },
@@ -2086,7 +2086,7 @@ WP23 Punggol East         {proposed}
 WP24 Punggol Coast        > NE18 {proposed}`
   },
   sll:{
-    name:"Seletar Line", code:"SLL", colour:"#f9cb9c", layout:"horizontal",
+    name:"Seletar Line", code:"SLL", colour:"#eacd5e", layout:"horizontal",
     spec:`# STC proposal, not an official LTA project
 SL2  Seletar Airport      > NC6 {proposed}
 SL3  Sengkang West        > ER14 {proposed}
@@ -2518,21 +2518,34 @@ function makeRow(st, idx, arr){
   row.draggable = true;
   row.dataset.idx = idx;
 
+  const top = document.createElement("div");
+  top.className = "stRowTop";
+  row.appendChild(top);
+
+  const bottom = document.createElement("div");
+  bottom.className = "stRowBottom";
+  row.appendChild(bottom);
+
   const handle = document.createElement("span");
   handle.className = "dragHandle"; handle.textContent = "⋮⋮";
-  row.appendChild(handle);
+  top.appendChild(handle);
 
   const codeInp = document.createElement("input");
   codeInp.className = "stCode"; codeInp.placeholder = "Code"; codeInp.value = st.code || "";
   codeInp.oninput = () => { st.code = codeInp.value.trim(); syncTextFromLive(); render(); };
   codeInp.onchange = refreshBranchFromOptions;
-  row.appendChild(codeInp);
+  top.appendChild(codeInp);
 
   const nameInp = document.createElement("input");
   nameInp.className = "stName"; nameInp.placeholder = "Station name"; nameInp.value = st.name || "";
   nameInp.oninput = () => { st.name = nameInp.value; syncTextFromLive(); render(); };
   nameInp.onchange = refreshBranchFromOptions;
-  row.appendChild(nameInp);
+  top.appendChild(nameInp);
+
+  const del = document.createElement("button");
+  del.type = "button"; del.className = "rowDel"; del.textContent = "✕"; del.title = "Delete station";
+  del.onclick = () => { arr.splice(idx, 1); syncTextFromLive(); renderEditorRows(); render(); };
+  top.appendChild(del);
 
   const icsInp = document.createElement("input");
   icsInp.className = "stIcs"; icsInp.placeholder = "IC codes"; icsInp.value = (st.ics || []).join(", ");
@@ -2540,14 +2553,9 @@ function makeRow(st, idx, arr){
     st.ics = icsInp.value.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
     syncTextFromLive(); render();
   };
-  row.appendChild(icsInp);
+  bottom.appendChild(icsInp);
 
-  row.appendChild(makeTierCheckboxes(st, () => { syncTextFromLive(); render(); }));
-
-  const del = document.createElement("button");
-  del.type = "button"; del.className = "rowDel"; del.textContent = "✕"; del.title = "Delete station";
-  del.onclick = () => { arr.splice(idx, 1); syncTextFromLive(); renderEditorRows(); render(); };
-  row.appendChild(del);
+  bottom.appendChild(makeTierCheckboxes(st, () => { syncTextFromLive(); render(); }));
 
   row.addEventListener("dragstart", () => { dragCtx = { arr, idx }; row.classList.add("dragging"); });
   row.addEventListener("dragend", () => row.classList.remove("dragging"));
@@ -2885,22 +2893,33 @@ function applyZoom(){
   $("zoomLabel").textContent = Math.round(zoom * 100) + "%";
 }
 function setZoom(z){ zoom = Math.min(4, Math.max(.08, z)); applyZoom(); }
+/* main is always full-bleed behind the (always-overlaying) header/sidebar
+   now, so its own clientWidth/clientHeight overstate how much room is
+   actually unobstructed — subtract the header's height and, when the
+   sidebar isn't collapsed, its current width, so "fit" still sizes the
+   diagram to the visible canvas rather than the area hidden under chrome. */
+function availSize(){
+  const m = $("main");
+  const layoutEl = document.querySelector(".layout");
+  const collapsed = layoutEl.classList.contains("sidebar-collapsed");
+  const asideW = collapsed ? 0 : document.querySelector("aside").getBoundingClientRect().width;
+  return { w: m.clientWidth - asideW - 60, h: m.clientHeight - 56 - 60 };
+}
 function fit(){
   if (!current) return;
-  const m = $("main");
-  const avail = m.clientWidth - 60, availH = m.clientHeight - 60;
+  const { w: avail, h: availH } = availSize();
   setZoom(Math.min(1, avail / current.width, availH / current.height));
   resetPan();
 }
 function fitWidth(){
   if (!current) return;
-  const avail = $("main").clientWidth - 60;
+  const { w: avail } = availSize();
   setZoom(Math.min(1, avail / current.width));
   resetPan();
 }
 function fitHeight(){
   if (!current) return;
-  const availH = $("main").clientHeight - 60;
+  const { h: availH } = availSize();
   setZoom(Math.min(1, availH / current.height));
   resetPan();
 }

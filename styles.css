@@ -29,29 +29,34 @@
   html,body{height:100%}
   body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
        background:var(--bg);color:var(--ink);overflow:hidden}
+  /* Header and sidebar both float as translucent overlays ON TOP of the
+     canvas at all times (not just mid-slide/peek) — the canvas itself is
+     always full-bleed behind them, so there's always real diagram content
+     for the blur to actually blur, whether the sidebar is pinned open,
+     collapsed, or peeking. */
   header{display:flex;align-items:center;gap:14px;padding:10px 16px;
-         background:color-mix(in srgb, var(--panel) 40%, transparent);
+         background:color-mix(in srgb, var(--panel) 60%, transparent);
          backdrop-filter:blur(5px) saturate(1.4);-webkit-backdrop-filter:blur(5px) saturate(1.4);
-         border-bottom:1px solid var(--border);height:56px;position:relative;z-index:60}
+         border-bottom:1px solid var(--border);height:56px;
+         position:absolute;top:0;left:0;right:0;z-index:100}
   header h1{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
   header .spacer{flex:1}
-  .layout{display:flex;height:calc(100% - 56px);position:relative}
+  .layout{position:absolute;top:0;left:0;right:0;bottom:0}
   /* The sidebar is always absolutely positioned and always its own full
-     width — it's never part of the flex flow, and its width never itself
-     animates (that's what caused the "cropping" look: shrinking width
-     reflows/clips the sidebar's own contents mid-transition). Showing and
-     hiding it is purely a transform:translateX slide, so the panel moves
-     as one solid piece; `main`'s margin-left animates in lockstep to
-     reclaim/cede the space in sync. */
+     width — it's never part of a flex flow, and its width never itself
+     animates (that's what caused the earlier "cropping" look: shrinking
+     width reflows/clips the sidebar's own contents mid-transition).
+     Showing and hiding it is purely a transform:translateX slide, so the
+     panel moves as one solid piece. */
   aside{width:var(--sidebar-w,440px);min-width:240px;max-width:80vw;box-sizing:border-box;
-        background:color-mix(in srgb, var(--panel) 45%, transparent);
+        background:color-mix(in srgb, var(--panel) 60%, transparent);
         backdrop-filter:blur(6px) saturate(1.4);-webkit-backdrop-filter:blur(6px) saturate(1.4);
         border-right:1px solid var(--border);
         overflow-y:auto;padding:16px;
-        position:absolute;left:0;top:0;bottom:0;z-index:50;
+        position:absolute;left:0;top:56px;bottom:0;z-index:80;
         transform:translateX(0);transition:transform .45s cubic-bezier(.4,0,.2,1)}
-  #sidebarResizer{position:absolute;left:var(--sidebar-w,440px);top:0;bottom:0;width:10px;margin-left:-5px;
-                   cursor:col-resize;background:transparent;z-index:51;
+  #sidebarResizer{position:absolute;left:var(--sidebar-w,440px);top:56px;bottom:0;width:10px;margin-left:-5px;
+                   cursor:col-resize;background:transparent;z-index:81;
                    transition:left .45s cubic-bezier(.4,0,.2,1)}
   #sidebarResizer:hover,#sidebarResizer.resizing{background:var(--accent)}
   #sidebarHoverZone{display:none}
@@ -63,15 +68,13 @@
   .layout.sidebar-collapsed aside.peeking{transform:translateX(0);box-shadow:0 0 28px rgba(0,0,0,.28)}
   .layout.sidebar-collapsed #sidebarResizer{display:none}
   .layout.sidebar-collapsed #sidebarHoverZone{
-    display:block;position:absolute;left:0;top:0;bottom:0;width:14px;z-index:49;
+    display:block;position:absolute;left:0;top:56px;bottom:0;width:14px;z-index:79;
   }
-  main{flex:1;overflow:hidden;position:relative;cursor:grab;
-       margin-left:var(--sidebar-w,440px);transition:margin-left .45s cubic-bezier(.4,0,.2,1);
-       background:
+  main{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;
+       padding:28px;background:
        linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%),
        linear-gradient(45deg,rgba(128,128,128,.07) 25%,transparent 25%,transparent 75%,rgba(128,128,128,.07) 75%);
        background-size:22px 22px;background-position:0 0,11px 11px;padding:28px;display:block}
-  .layout.sidebar-collapsed main{margin-left:0}
   main.panning{cursor:grabbing}
   /* the diagram is positioned by translate (--pan-x/--pan-y, set from JS as
      the user drags), not scroll offset — that way panning is independent
@@ -195,17 +198,22 @@
            letter-spacing:.04em;background:var(--field);color:var(--muted)}
   .modeBtn.active{background:var(--accent);color:#fff}
   .rowList{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
-  .stRow{display:flex;align-items:center;gap:5px;background:var(--field);border:1px solid var(--border);
-         border-radius:7px;padding:5px 6px}
+  /* Each station tile spans two rows — code/name/delete on top, IC codes
+     and roadmap-tier checkboxes below — so every control has room to
+     breathe instead of being squeezed into one cramped line. */
+  .stRow{display:flex;flex-direction:column;gap:6px;background:var(--field);border:1px solid var(--border);
+         border-radius:7px;padding:8px}
   .stRow.dragging{opacity:.4}
   .stRow.dragover{border-color:var(--accent)}
+  .stRowTop{display:flex;align-items:center;gap:5px}
+  .stRowBottom{display:flex;align-items:center;gap:5px}
   .dragHandle{flex:none;cursor:grab;color:var(--muted);font-size:13px;padding:0 2px;user-select:none;line-height:1}
   .stRow input{min-width:0;border:1px solid transparent;background:transparent;color:var(--ink);padding:5px 6px;border-radius:5px;font-size:12.5px}
   .stRow input:hover{border-color:var(--border)}
   .stRow input:focus{border-color:var(--accent);background:var(--panel);box-shadow:none}
   .stCode{width:44px;flex:none;font-weight:650;text-transform:uppercase}
   .stName{flex:1;min-width:0}
-  .stIcs{width:90px;flex:none;color:var(--muted)}
+  .stIcs{flex:1;min-width:0;color:var(--muted)}
   .rowDel{flex:none;border:0;background:var(--border);color:var(--ink);font-size:13px;width:22px;height:22px;
           line-height:1;border-radius:50%;padding:0}
   .rowDel:hover{color:#fff;background:#c0392b}
