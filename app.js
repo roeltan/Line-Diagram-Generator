@@ -1161,16 +1161,19 @@ function buildDiagram(cfg){
       for (let i = 1; i < segs.length; i++){
         if (segs[i].cd.osi || segs[i].cd.nearby) runs.push([segs[i]]); else runs[runs.length-1].push(segs[i]);
       }
-      /* connectors are drawn before the caplets (below, in SVG draw order)
-         so a caplet's rounded corner always sits cleanly on top of the
-         connector rather than the thin line overlapping onto it. */
+      /* A nearby connector is drawn before the caplets (below, in SVG draw
+         order) so a caplet's rounded corner sits cleanly on top of it
+         rather than the thin line overlapping onto it. An OSI connector is
+         the opposite — LTA's own diagrams draw it OVER the caplets so the
+         two read as directly joined, with no outline stroke breaking the
+         join — so it's drawn last, after the caplets. */
       for (let i = 1; i < runs.length; i++){
-        const a = runs[i-1][runs[i-1].length-1], b = runs[i][0];
+        const b = runs[i][0];
+        if (!b.cd.nearby) continue;
+        const a = runs[i-1][runs[i-1].length-1];
         const aFirst = a.x1 <= b.x0;
         const gx0 = aFirst ? a.x1 : b.x1, gx1 = aFirst ? b.x0 : a.x0;
-        if (b.cd.nearby) drawNearbyConnector(el, gLabels, gx0, n.y, gx1, n.y, textColour);
-        else drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
-                               aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
+        drawNearbyConnector(el, gLabels, gx0, n.y, gx1, n.y, textColour);
       }
       runs.forEach((run, runIdx) => {
         const rx0 = Math.min(...run.map(s => s.x0)), rx1 = Math.max(...run.map(s => s.x1));
@@ -1192,6 +1195,14 @@ function buildDiagram(cfg){
                      stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         bb.rect(rx0, y0, rx1-rx0, h);
       });
+      for (let i = 1; i < runs.length; i++){
+        const a = runs[i-1][runs[i-1].length-1], b = runs[i][0];
+        if (b.cd.nearby) continue;
+        const aFirst = a.x1 <= b.x0;
+        const gx0 = aFirst ? a.x1 : b.x1, gx1 = aFirst ? b.x0 : a.x0;
+        drawOsiConnector(el, gLabels, gx0, n.y, gx1, n.y, 5,
+                          aFirst ? a.cd.c : b.cd.c, aFirst ? b.cd.c : a.cd.c);
+      }
       codesExtent = w0 / 2;   // name sits opposite the ICs, only needs to clear the own-code segment
       farEdge = edge;
 
@@ -1214,15 +1225,16 @@ function buildDiagram(cfg){
         }
         return { cd, w, cy, gapStart };
       });
-      /* connectors are drawn before the caplets (below, in SVG draw order)
-         so a caplet's rounded corner always sits cleanly on top of the
-         connector rather than the thin line overlapping onto it. */
+      /* A nearby connector is drawn before the caplets (below, in SVG draw
+         order) so a caplet's rounded corner sits cleanly on top of it
+         rather than the thin line overlapping onto it. An OSI connector is
+         the opposite — LTA's own diagrams draw it OVER the caplets so the
+         two read as directly joined, with no outline stroke breaking the
+         join — so it's drawn last, after the caplets. */
       placed.forEach((p, idx) => {
-        if (p.gapStart === null) return;
-        const prev = placed[idx - 1];
+        if (!p.cd.nearby) return;
         const gapEnd = p.gapStart + dir[1] * OSI_GAP;
-        if (p.cd.osi) drawOsiConnector(el, gLabels, n.x, p.gapStart, n.x, gapEnd, 5, prev.cd.c, p.cd.c);
-        else if (p.cd.nearby) drawNearbyConnector(el, gLabels, n.x, p.gapStart, n.x, gapEnd, textColour);
+        drawNearbyConnector(el, gLabels, n.x, p.gapStart, n.x, gapEnd, textColour);
       });
       placed.forEach((p, idx) => {
         const { cd, w, cy } = p;
@@ -1235,6 +1247,12 @@ function buildDiagram(cfg){
                                 "letter-spacing":".3" }, gLabels);
         setCodeText(tx, cd.t, STYLE.codeSize);
         bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
+      });
+      placed.forEach((p, idx) => {
+        if (!p.cd.osi) return;
+        const prev = placed[idx - 1];
+        const gapEnd = p.gapStart + dir[1] * OSI_GAP;
+        drawOsiConnector(el, gLabels, n.x, p.gapStart, n.x, gapEnd, 5, prev.cd.c, p.cd.c);
       });
       codesExtent = Math.abs(edge - n.y);
       farEdge = edge;
