@@ -1691,12 +1691,18 @@ ES7  Tuas Port Gate                {proposed}`
   cc:{
     /* Circle Line Stage 6 (Keppel / Cantonment / Prince Edward Road) opened
        12 Jul 2026, closing the loop and renumbering the old Marina Bay spur
-       (CE1/CE2) into CC33/CC34. Trunk starts at Haw Par Villa (CC25) and
-       reads CC25→CC24→…→CC4→CC34→…→CC26→ back to CC25; Dhoby Ghaut/Bras
+       (CE1/CE2) into CC33/CC34. Trunk starts at Pasir Panjang (CC26) and
+       reads CC26→CC25→…→CC4→CC34→…→CC27→ back to CC26; Dhoby Ghaut/Bras
        Basah/Esplanade (CC1-CC3) are a short spur off Promenade (CC4) — a
-       real example of a loop layout with a branch. */
+       real example of a loop layout with a branch. That spur is only ever
+       shown current/future ({until:future}) — a further proposed-tier
+       renumbering reassigns CC1-CC3 to Prince Edward Road/Marina Bay/
+       Bayfront instead (each duplicated as an {until:future} entry under
+       its current code and a {proposed} entry under its new one), so the
+       two never actually collide at any single tier. */
     name:"Circle Line", code:"CCL", colour:"#fa9e0d", layout:"loop", spacing:104, closed:true,
-    spec:`CC25 Haw Par Villa
+    spec:`CC26 Pasir Panjang
+CC25 Haw Par Villa
 CC24 Kent Ridge
 CC23 one-north
 CC22 Buona Vista        > EW21
@@ -1717,23 +1723,25 @@ CC7  Mountbatten
 CC6  Stadium
 CC5  Nicoll Highway
 CC4  Promenade          > DT15
-CC34 Bayfront           > DT16
-CC33 Marina Bay         > NS27, TE20
-CC32 Prince Edward Road
+CC34 Bayfront           > DT16 {until:future}
+CC3  Bayfront           > DT16 {proposed}
+CC33 Marina Bay         > NS27, TE20 {until:future}
+CC2  Marina Bay         > NS27, TE20 {proposed}
+CC32 Prince Edward Road {until:future}
+CC1  Prince Edward Road {proposed}
 CC31 Cantonment
 CC30 Keppel
 CC29 HarbourFront       > NE1, EW17, BUS
 CC28 Telok Blangah
 CC27 Labrador Park
-CC26 Pasir Panjang
 
-[branch from CC4 up]
+[branch from CC4 up] {until:future}
 CC3  Esplanade
 CC2  Bras Basah
 CC1  Dhoby Ghaut        > NS24, NE6
 
 # STC proposal, not an official LTA project — shuttle from CC9's middle platform
-[branch from CC9 down] {proposed}
+[branch from CC9 down shuttle] {proposed}
 CJ1  Joo Chiat         {proposed}
 CJ2  Marine Parade     > TE26 {proposed}
 CJ3  Parkway           > HL21 {proposed}`
