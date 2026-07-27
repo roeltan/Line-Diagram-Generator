@@ -903,7 +903,48 @@ function buildDiagram(cfg){
       }
     }
 
-    if (cfg.layout === "loop"){
+    if (cfg.layout === "loop" && cfg.loopVertical){
+      /* Vertical loop: stations run top-to-bottom on each side, so the
+         loop's own "reading direction" is Y here and "out" (away from the
+         loop) is X — the mirror image of the horizontal-loop case below
+         with axes swapped throughout. Previously this case fell through
+         to the horizontal-loop code unchanged, which shot every branch out
+         sideways in Y and ran it parallel in X regardless of orientation —
+         it happened to still draw *something*, but sized/aligned itself
+         as if the loop were horizontal, not vertical. */
+      const defaultSgn = jn.nx < 0 ? -1 : 1;
+      const sgn = b.dir === "left" ? -1 : b.dir === "right" ? 1 : defaultSgn;
+      const trunkNeighbour = j + 1 < trunkCount ? nodes[j + 1] : nodes[j - 1];
+      const trunkDir = trunkNeighbour ? (trunkNeighbour.y >= jn.y ? 1 : -1) : 1;
+      const turnDir = b.grow ? (b.grow === "left" ? -1 : 1) : trunkDir;
+      const bx = jn.x + sgn * gap;
+      /* an orthogonal branch shooting out on the same side the station's
+         own name already sits would run the branch line right through the
+         name text — flip the name to the other side instead. */
+      if (b.curve === "orthogonal") jn.label = sgn < 0 ? LOOP_RIGHT : LOOP_LEFT;
+      const y1 = jn.y + turnDir * 1.5 * sp;
+      const dist = Math.abs(y1 - jn.y);
+      b.stations.forEach((st, i) => {
+        nodes.push({ ...st, x:bx, y:y1 + turnDir * i * sp, colour:bc,
+                     label: sgn < 0 ? LOOP_LEFT : LOOP_RIGHT,
+                     kind: i === b.stations.length-1 ? "term" : "", branch:b });
+      });
+      const lastY = y1 + turnDir * (b.stations.length-1) * sp;
+      const d = b.curve === "orthogonal"
+        ? roundedPath([[jn.x, jn.y], [bx, jn.y], [bx, lastY]], 56)
+        : (() => {
+            const inset = Math.min(20, dist * 0.3);
+            const sy = jn.y + turnDir * inset;
+            const ey = y1 - turnDir * inset;
+            const distMid = Math.abs(ey - sy);
+            const c1y = sy + turnDir*distMid*0.5, c1x = jn.x;
+            const c2y = ey - turnDir*distMid*0.5, c2x = bx;
+            return `M ${F(jn.x)} ${F(jn.y)} L ${F(jn.x)} ${F(sy)} ` +
+                   `C ${F(c1x)} ${F(c1y)}, ${F(c2x)} ${F(c2y)}, ${F(bx)} ${F(ey)} L ${F(bx)} ${F(y1)} L ${F(bx)} ${F(lastY)}`;
+          })();
+      drawBranchLine(d, bc, shuttle);
+
+    } else if (cfg.layout === "loop"){
       /* shoot out (or, if b.dir explicitly says otherwise, in toward the
          loop's own interior — the H-expansion above already made room)
          then turn to run parallel with the loop's own left-to-right
@@ -2763,7 +2804,9 @@ function makeBranchBlock(b, bIdx){
   const dirSel = document.createElement("select");
   dirSel.className = "brDir";
   const dirOpts = layoutVal === "vertical" ? [["right","branches right"],["left","branches left"]]
-    : layoutVal === "loop" ? [["","auto (outward)"],["down","branches down"],["up","branches up"]]
+    : layoutVal === "loop" ? (S.loopVertical.checked
+        ? [["","auto (outward)"],["left","branches left"],["right","branches right"]]
+        : [["","auto (outward)"],["down","branches down"],["up","branches up"]])
     : [["down","branches down"],["up","branches up"]];
   dirSel.innerHTML = dirOpts.map(([v,l]) => `<option value="${v}">${l}</option>`).join("");
   dirSel.value = b.dir || dirOpts[0][0];
@@ -3394,6 +3437,7 @@ document.querySelectorAll("#orientationRow .spacingBtn").forEach(b => {
     if (S.layout.value === "loop"){
       S.loopVertical.checked = b.dataset.value === "vertical";
       syncLayoutButtons();
+      if (mode === "editor") renderEditorRows();   // branch blocks' direction dropdown labels (up/down vs left/right) depend on loop orientation too
       render(); fit();
     } else {
       setLayout(b.dataset.value);
