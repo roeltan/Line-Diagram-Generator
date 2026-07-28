@@ -1256,14 +1256,27 @@ function buildDiagram(cfg){
     const along = (d) => axisHoriz ? { x: jn.x + axisSgn * d, y: jn.y } : { x: jn.x, y: jn.y + axisSgn * d };
     const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
 
-    /* Half the final gap between the two arms once parallel — the same
-       offset a single ordinary branch would sit at, so "branch spacing"
-       consistently governs both. A true 45° diagonal needs equal along-
-       and across-axis travel, so the diagonal's own length falls out of
-       this directly (no separate control for it). */
-    const halfGap = branchGap;
-    const cornerRadius = Math.min(40, halfGap * 0.5);
-    const postTurnBuf = Math.min(20, sp * 0.3);   // short straight run after the turn, before the first station
+    /* Half the final gap between the two arms once parallel, so the two
+       arms sit a total of one branch spacing apart (not two) — the same
+       total offset a single ordinary branch would sit at either side of.
+       A true 45° diagonal needs equal along- and across-axis travel, so
+       the diagonal's own length falls out of this directly (no separate
+       control for it). WYE_CORNER_R is the nominal turn radius where the
+       diagonal straightens out to run parallel with the trunk — tweak
+       this one constant to make that bend tighter/looser (roundedPath
+       clamps it down automatically if the diagonal or the post-turn run
+       is too short to fit it, same as any other rounded corner in this
+       app). postTurnBuf is that post-turn straight run itself, before the
+       first station — sized to comfortably clear the diagonal's own
+       length (a true 45° turn can never round tighter than half of its
+       shorter adjacent segment, so a short postTurnBuf would silently
+       cap the radius below WYE_CORNER_R even if there's plenty of room
+       on the diagonal's side) so the curve actually finishes before the
+       run starts, instead of the two silently overlapping. */
+    const halfGap = branchGap / 2;
+    const WYE_CORNER_R = 70;
+    const diagLen = halfGap * Math.SQRT2;
+    const postTurnBuf = Math.max(diagLen, sp * 0.5, 40);
 
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
@@ -1273,7 +1286,7 @@ function buildDiagram(cfg){
       const corner = rowPoint(halfGap);
       const stationPts = arm.stations.map((st, i) => rowPoint(halfGap + postTurnBuf + i * sp));
       bb.add(corner.x, corner.y);
-      const d = roundedPath([[jn.x, jn.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], cornerRadius);
+      const d = roundedPath([[jn.x, jn.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], WYE_CORNER_R);
       drawBranchLine(d, bc, false);
 
       const rowLabel = axisHoriz ? DIAG : (armSgn < 0 ? LEFT : RIGHT);
