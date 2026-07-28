@@ -1302,21 +1302,24 @@ function buildDiagram(cfg){
        A true 45° diagonal needs equal along- and across-axis travel, so
        the diagonal's own length falls out of this directly (no separate
        control for it). WYE_CORNER_R is the nominal turn radius where the
-       diagonal straightens out to run parallel with the trunk — tweak
-       this one constant to make that bend tighter/looser (roundedPath
-       clamps it down automatically if the diagonal or the post-turn run
-       is too short to fit it, same as any other rounded corner in this
-       app). postTurnBuf is that post-turn straight run itself, before the
-       first station — sized to comfortably clear the diagonal's own
-       length (a true 45° turn can never round tighter than half of its
-       shorter adjacent segment, so a short postTurnBuf would silently
-       cap the radius below WYE_CORNER_R even if there's plenty of room
-       on the diagonal's side) so the curve actually finishes before the
-       run starts, instead of the two silently overlapping. */
+       diagonal straightens out to run parallel with the trunk — tied to
+       station spacing (sp) rather than a flat constant, so the wye's own
+       footprint grows and shrinks along with the rest of the diagram
+       instead of staying visually fixed while everything else rescales
+       (roundedPath clamps it down automatically if the diagonal or the
+       post-turn run is too short to fit it, same as any other rounded
+       corner in this app). postTurnBuf is that post-turn straight run
+       itself, before the first station — sized to comfortably clear the
+       diagonal's own length (a true 45° turn can never round tighter
+       than half of its shorter adjacent segment, so a short postTurnBuf
+       would silently cap the radius below WYE_CORNER_R even if there's
+       plenty of room on the diagonal's side) so the curve actually
+       finishes before the run starts, instead of the two silently
+       overlapping. */
     const halfGap = branchGap / 2;
-    const WYE_CORNER_R = 70;
+    const WYE_CORNER_R = Math.max(30, Math.min(sp * 0.9, 90));
     const diagLen = halfGap * Math.SQRT2;
-    const postTurnBuf = Math.max(diagLen, sp * 0.5, 40);
+    const postTurnBuf = Math.max(diagLen, sp * 0.5, WYE_CORNER_R * 0.6);
 
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
@@ -3821,7 +3824,6 @@ $("zoomOut").onclick = () => setZoom(zoom / 1.25);
 $("fitWidth").onclick = fitWidth;
 $("fitHeight").onclick = fitHeight;
 $("main").addEventListener("wheel", e => {
-  if (!e.ctrlKey) return;
   e.preventDefault();
   setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1/1.1));
 }, { passive:false });
