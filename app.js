@@ -4072,7 +4072,22 @@ $("stage").addEventListener("click", e => {
   if (!row) return;
   row.scrollIntoView({ behavior:"smooth", block:"center" });
   row.classList.add("flash");
-  setTimeout(() => row.classList.remove("flash"), 900);
+  /* The flash needs to stay on for a while *after* scrolling finishes, not
+     just for a fixed span from the moment of the click — a long scroll
+     (station near the bottom of a long line) would otherwise eat most or
+     all of that fixed span before the row is even in view. "scrollend"
+     fires once the sidebar's own smooth-scroll actually settles; a plain
+     timeout is the fallback for browsers that don't support it yet. */
+  const FLASH_HOLD = 1600;
+  const sidebar = row.closest("aside") || row.parentElement;
+  let done = false;
+  const clear = () => { if (done) return; done = true; row.classList.remove("flash"); };
+  if (sidebar && "onscrollend" in window){
+    sidebar.addEventListener("scrollend", () => setTimeout(clear, FLASH_HOLD), { once:true });
+    setTimeout(clear, FLASH_HOLD + 4000);   // safety net in case scrollend never fires (e.g. no scrolling was needed)
+  } else {
+    setTimeout(clear, FLASH_HOLD + 900);    // no scrollend support — just budget generously for the scroll itself
+  }
 });
 
 /* --------------------------------------------------------------- export menu */
