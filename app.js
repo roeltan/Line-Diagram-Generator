@@ -1457,6 +1457,16 @@ function buildDiagram(cfg){
        delegated listener that can scroll the matching row into view. */
     const gLabels = el("g", n.__uid !== undefined
       ? { "data-station-uid": n.__uid, style:"cursor:pointer" } : null, gLabelsRoot);
+    if (n.__uid !== undefined){
+      /* A caplet's own painted pixels are a fairly small, precisely-placed
+         target — the gaps around it (say, between the caplet and its own
+         diagonal name label) aren't painted at all, so neither a browser's
+         hit-testing nor CSS :hover ever fires there. This transparent (but
+         still *painted*, unlike fill:none) circle centred on the station's
+         own point gives hover/click a generous, reliable target regardless
+         of which label style is in play. */
+      el("circle", { cx:F2(n.x), cy:F2(n.y), r:18, fill:"transparent" }, gLabels);
+    }
     const L = n.label;
     const codes = [];
     if (cfg.showCodes && n.code) codes.push({ t:n.code, c:n.colour });

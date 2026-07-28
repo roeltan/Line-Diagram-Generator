@@ -83,6 +83,11 @@
      recalculated scrollable area otherwise would. */
   #stage{display:inline-block;background:var(--panel);box-shadow:var(--shadow);border-radius:4px;
          transform:translate(var(--pan-x,0px),var(--pan-y,0px));will-change:transform}
+  /* Each station's own caplet(s)/name/etc. are wrapped in one of these
+     groups (see buildDiagram) so hovering it signals "click to jump to
+     this station's card in the sidebar" before the user ever clicks. */
+  #stage g[data-station-uid]{transition:filter .12s ease-out}
+  #stage g[data-station-uid]:hover{filter:drop-shadow(0 0 5px var(--accent)) drop-shadow(0 0 5px var(--accent))}
   label{display:block;font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
         color:var(--muted);margin:0 0 5px}
   input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);
