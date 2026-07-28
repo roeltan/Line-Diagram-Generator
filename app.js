@@ -944,6 +944,15 @@ function buildDiagram(cfg){
       if (wy.b && wy.b.stations.length) markJunctionDir(idx, false);
     });
   }
+  /* tag the actual junction nodes directly (rather than re-deriving trunk
+     index later) so the bus-icon placement below can just check n.branchDown
+     — a down-going branch/wye-arm's own line runs straight down through the
+     junction's x for a long stretch (up to a full branchGap), so a bus icon
+     centred under the station the usual way would sit right on top of it. */
+  junctionDirs.forEach((dirs, idx) => {
+    const n = nodes[idx];
+    if (n){ n.branchUp = dirs.up; n.branchDown = dirs.down; }
+  });
 
   /* ---- branches: smooth curve (or orthogonal turn) out of the trunk ---- */
   const warnings = [];
@@ -1582,8 +1591,15 @@ function buildDiagram(cfg){
       } else {
         const edgeY = farEdge !== null ? farEdge : n.y;
         const iy = (dir[1] >= 0 ? edgeY + gap : edgeY - gap - busSize);
-        el("use", { href:"#busIcon", x:F2(n.x - busSize/2), y:F2(iy), width:F2(busSize), height:F2(busSize) }, gLabels);
-        bb.rect(n.x - busSize/2, iy, busSize, busSize);
+        /* a down-going branch/wye-arm runs straight down through n.x for a
+           long stretch, so centring the icon there the usual way would sit
+           right on top of it — slide it out to the caplet stack's own
+           right edge (the bottom-right corner) instead of straight below. */
+        const ix = (n.branchDown && dir[1] > 0 && ownCapletBox)
+          ? ownCapletBox.x + ownCapletBox.w + gap
+          : n.x - busSize/2;
+        el("use", { href:"#busIcon", x:F2(ix), y:F2(iy), width:F2(busSize), height:F2(busSize) }, gLabels);
+        bb.rect(ix, iy, busSize, busSize);
         codesExtent += busSize + gap;   // keep the inline name clear of the icon too
       }
     }
