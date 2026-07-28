@@ -44,6 +44,45 @@ const LINE_INFO = {
   NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL", tier:"proposed" },
   NC:{ name:"North Coast Line", colour:"#4d91ba", acr:"NCL", tier:"proposed" }
 };
+/* A frozen copy of LINE_INFO exactly as shipped, captured before anything
+   can mutate it — the saved-state format below persists only what a user
+   has actually customized (added/changed/deleted prefixes) relative to
+   this, rather than the whole table. That way a future update to a
+   built-in line's colour/tier (or a brand new line altogether, like this
+   file adding Fernvale LRT) takes effect for everyone on their next load,
+   instead of being silently masked forever by whatever the table looked
+   like the last time they happened to save. */
+const LINE_INFO_DEFAULTS = JSON.parse(JSON.stringify(LINE_INFO));
+function lineInfoDiff(){
+  const added = {}, deleted = [];
+  for (const k in LINE_INFO){
+    const cur = LINE_INFO[k], def = LINE_INFO_DEFAULTS[k];
+    if (!def || def.name !== cur.name || def.colour !== cur.colour || def.acr !== cur.acr || def.tier !== cur.tier) added[k] = cur;
+  }
+  for (const k in LINE_INFO_DEFAULTS) if (!(k in LINE_INFO)) deleted.push(k);
+  return { added, deleted };
+}
+/* Restores LINE_INFO to the current built-in defaults, then re-applies a
+   saved diff on top. Also accepts the OLD save format (the raw, full
+   table, from before this diff-based approach existed) — merged on top of
+   the fresh defaults rather than replacing wholesale, so a key absent
+   from an old save (because it simply didn't exist yet when that was
+   saved, e.g. a brand new line) still comes through instead of vanishing.
+   That merge can't distinguish "the user genuinely deleted this" from
+   "this didn't exist yet", so an old save can't un-delete a prefix the
+   same way a new-format diff can — a reasonable one-time trade-off since
+   it self-heals the moment this next re-saves in the new format anyway. */
+function applyLineInfoDiff(saved){
+  for (const k in LINE_INFO) delete LINE_INFO[k];
+  Object.assign(LINE_INFO, JSON.parse(JSON.stringify(LINE_INFO_DEFAULTS)));
+  if (!saved) return;
+  if (saved.added || saved.deleted){
+    Object.assign(LINE_INFO, saved.added || {});
+    (saved.deleted || []).forEach(k => delete LINE_INFO[k]);
+  } else {
+    Object.assign(LINE_INFO, saved);
+  }
+}
 const SWATCHES = ["#d42e12","#009645","#9900aa","#fa9e0d","#005ec4","#9d5b25",
                  "#0099aa","#97c616","#718573","#e8467c","#00a1de","#1f2937"];
 
@@ -2114,7 +2153,7 @@ NE13 Kovan
 NE14 Hougang            > CR8, BUS
 NE15 Buangkok           > ER11, BUS
 NE16 Sengkang           > STC, BUS
-NE17 Punggol            > CP4, NC5!, PTC, BUS
+NE17 Punggol            > CP4(until:future), NC5!, PTC, BUS
 NE18 Punggol Coast      > WP24, FV1, BUS`
   },
   dt:{
@@ -2564,7 +2603,10 @@ JE7  Pandan Reservoir`
   crl:{
     /* Cross Island Line — under construction. Phase 1 targeted 2030,
        Punggol Extension (CP, branching off Pasir Ris) 2032, Phase 2
-       (Turf City onward) also targeted 2032. */
+       (Turf City onward) also targeted 2032. The Punggol Extension shuttle
+       only exists through "future" — RMP50 has it fully subsumed into the
+       (separately-modelled) North Coast Line by "proposed", so the branch
+       itself is tagged {until:future} rather than appearing at every tier. */
     name:"Cross Island Line", code:"CRL", colour:"#97c616", layout:"horizontal",
     spec:`# Under construction — Phase 1 target 2030, Punggol Extension & Phase 2 target 2032
 CR19 Jurong Lake District
@@ -2577,7 +2619,7 @@ CR13 Bright Hill         > TE7
 CR12 Teck Ghee
 CR11 Ang Mo Kio          > NS16
 CR10 Tavistock
-CR9  Serangoon North    > FV12 {proposed}
+CR9  Serangoon North    > FV12
 CR8  Hougang             > NE14
 CR7  Defu
 CR6  Tampines North
@@ -2586,7 +2628,7 @@ CR4  Pasir Ris East
 CR3  Loyang
 CR2  Aviation Park
 
-[branch from CR5 down shuttle CP1]
+[branch from CR5 down shuttle CP1] {until:future}
 CP2  Elias
 CP3  Riviera             > PE4*
 CP4  Punggol             > NE17, PTC`
@@ -2826,10 +2868,7 @@ function applyConfig(c){
   S.showAccent.checked = c.showAccent !== false;
   S.opaque.checked = c.opaque !== false;
   setDiagramDark(c.dark === true);
-  if (c.lineInfo){
-    for (const k in LINE_INFO) delete LINE_INFO[k];
-    Object.assign(LINE_INFO, c.lineInfo);
-  }
+  if (c.lineInfo) applyLineInfoDiff(c.lineInfo);
   if (Array.isArray(c.lineOrder)) lineOrder = c.lineOrder.slice();
   renderLineInfoRows();
   const errors = setLiveFromText(c.spec || "");
@@ -3549,7 +3588,7 @@ function snapshotConfig(){
     showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked, showSir:S.showSir.checked,
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
-    lineInfo:LINE_INFO, lineOrder:lineOrder
+    lineInfo:lineInfoDiff(), lineOrder:lineOrder
   };
 }
 function save(){
