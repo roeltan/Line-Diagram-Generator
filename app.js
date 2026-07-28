@@ -2633,7 +2633,7 @@ NC13 Woodlands North      > TE1, RTS {sir,proposed}`
        (Gek Poh...Peng Kang Hill, the NTU spur) as the up arm, JS8-12
        (Boon Lay...Jurong Pier) as the down arm. */
     name:"Jurong Region Line", code:"JRL", colour:"#0099aa", layout:"horizontal",
-    spacing:80, branchSpacing:150,
+    spacing:80, branchSpacing:170,
     spec:`# Under construction — JS/JW mid-2028, JE 2028, JS9-12/JW3-5 2029
 JS7  Bahar Junction
 JS6  Jurong West
