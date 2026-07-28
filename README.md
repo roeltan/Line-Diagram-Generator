@@ -190,13 +190,60 @@ off that single end, like Sengkang LRT; one `[loop at start]` and one
 line's own Shape is set to Loop — a closed loop trunk has no "start"/"end"
 for a balloon loop to hang off.
 
+The Editor's **Start/End** selectors (see below) treat a trunk end as a
+single slot — None, Balloon loop, or Wye — so if you hand-write a bowtie
+(two loops sharing an end) in Text mode, opening the Editor and touching
+that end's selector will collapse it back down to one. Stick to Text mode
+for that particular shape.
+
+### Wye
+
+A **wye** is also part of the trunk's own shape, sharing whichever end of
+the trunk's station list it names — but unlike a balloon loop, its two arms
+never reconverge. Each arm leaves the junction on a plain 45° diagonal, then
+straightens out to run parallel with the trunk's own reading direction, so
+an arm with many stations only grows the diagram along that reading axis,
+not perpendicular to it. Both arms carry equal visual weight (same angle,
+same line thickness) — useful where an ordinary branch (a spur off a
+trunk that keeps going straight) would visually read as the lower-priority
+option, but here neither arm is "the trunk continuing on."
+
+Write one `[wye <start|end> <up|down|left|right>]` section per arm, sharing
+the same `start`/`end`:
+
+```
+T1  Alpha
+T2  Bravo
+
+[wye end up]
+WU1  Up One
+WU2  Up Two
+
+[wye end down]
+WD1  Down One
+```
+
+`up`/`down` name the arms on a horizontal trunk, `left`/`right` on a
+vertical one — either vocabulary parses regardless of orientation (`up`
+and `left` are the same arm internally, likewise `down`/`right`), so a spec
+written for one orientation still parses if you later switch. Each arm
+keeps its own station list, colour override, and roadmap tier, independent
+of the other — one arm can be `{proposed}` while the other is real today.
+The arm-to-arm gap (and so the diagonal's own length, since a true 45° line
+needs equal along- and across-axis travel) is driven by Branch spacing, the
+same offset a single ordinary branch already sits at. Same restriction as a
+balloon loop: not available when Shape is Loop.
+
 The **Editor** view (default) gives you a row-based UI for all of this — add/
 reorder/delete stations and branches without touching text. The **⇅** button
 next to the Editor/Text toggle reverses the trunk's station order in place
 (handy for flipping which end a line reads from without retyping it) — every
-branch and balloon loop block has its own **⇅** too, reversing just that
-list. Switch to **Text** to paste/edit the raw syntax directly, or to copy
-it out.
+branch, balloon-loop, and wye-arm block has its own **⇅** too, reversing
+just that list. The **Start / End** section near the bottom of the Editor
+is where a balloon loop or wye actually lives — each end is a single
+None/Balloon loop/Wye selector, switching between them replaces whichever
+one previously occupied that end. Switch to **Text** to paste/edit the raw
+syntax directly, or to copy it out.
 
 ### Roadmap tiers (Current / Future / Proposed)
 

@@ -2785,8 +2785,8 @@ function syncVisibility(){
   const l = S.layout.value;
   $("closedField").style.display = l === "loop"  ? "" : "none";
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
-  $("loopsContainer").style.display = l === "loop" ? "none" : "";
-  $("addLoopBtn").style.display = l === "loop" ? "none" : "";
+  $("trunkEndsContainer").style.display = l === "loop" ? "none" : "";
+  $("trunkEndsSect").style.display = l === "loop" ? "none" : "";
   syncSpacingSlider();
   syncBranchSpacingSlider();
 }
@@ -3103,57 +3103,120 @@ function makeBranchBlock(b, bIdx){
   return wrap;
 }
 
-function makeLoopBlock(lp, lpIdx){
+/* Shared sub-editor for anything shaped like {colour, tier, until,
+   stations}: colour override + tier checkboxes + reverse button + station
+   row list + add-station button. Used for a balloon loop's own stations
+   and, independently, for each of a wye's two arms — same shape of data,
+   different container, so this lives once instead of being duplicated
+   per use site. */
+function makeStationGroupBlock(item, opts){
   const wrap = document.createElement("div");
-  wrap.className = "branchBlock";
+  wrap.className = "branchGroup";
 
   const head = document.createElement("div");
-  head.className = "branchHead";
-
-  const atLabel = document.createElement("span");
-  atLabel.style.cssText = "font-size:11px;color:var(--muted);align-self:center";
-  atLabel.textContent = "loop at";
-  head.appendChild(atLabel);
-
-  const atSel = document.createElement("select");
-  atSel.className = "brFrom";
-  atSel.innerHTML = `<option value="start">start of trunk</option><option value="end">end of trunk</option>`;
-  atSel.value = lp.at === "start" ? "start" : "end";
-  atSel.onchange = () => { lp.at = atSel.value; syncTextFromLive(); renderEditorRows(); render(); };
-  head.appendChild(atSel);
+  head.className = "branchGroupRow";
+  if (opts.label) head.appendChild(branchFieldLabel(opts.label));
 
   const colourInp = document.createElement("input");
-  colourInp.type = "color"; colourInp.title = "Loop colour override";
-  colourInp.value = lp.colour || S.colour.value;
-  colourInp.oninput = () => { lp.colour = colourInp.value; syncTextFromLive(); render(); };
+  colourInp.type = "color"; colourInp.title = "Colour override";
+  colourInp.value = item.colour || S.colour.value;
+  colourInp.oninput = () => { item.colour = colourInp.value; syncTextFromLive(); render(); };
   head.appendChild(colourInp);
+
+  head.appendChild(makeTierCheckboxes(item, () => { syncTextFromLive(); render(); }));
 
   const revBtn = document.createElement("button");
   revBtn.type = "button"; revBtn.className = "icon"; revBtn.textContent = "⇅";
-  revBtn.title = "Reverse this loop's station order";
-  revBtn.onclick = () => reverseList(lp.stations);
+  revBtn.title = "Reverse station order";
+  revBtn.onclick = () => reverseList(item.stations);
   head.appendChild(revBtn);
-
-  head.appendChild(makeTierCheckboxes(lp, () => { syncTextFromLive(); render(); }));
-
-  const delBtn = document.createElement("button");
-  delBtn.type = "button"; delBtn.className = "branchDel"; delBtn.textContent = "✕ Remove loop";
-  delBtn.onclick = () => { live.loops.splice(lpIdx, 1); syncTextFromLive(); renderEditorRows(); render(); };
-  head.appendChild(delBtn);
-
   wrap.appendChild(head);
 
   const rows = document.createElement("div");
   rows.className = "rowList branchRows";
-  lp.stations.forEach((st, i) => rows.appendChild(makeRow(st, i, lp.stations)));
+  item.stations.forEach((st, i) => rows.appendChild(makeRow(st, i, item.stations)));
   wrap.appendChild(rows);
 
   const addBtn = document.createElement("button");
-  addBtn.type = "button"; addBtn.className = "addBtn"; addBtn.textContent = "+ Add station to loop";
-  addBtn.onclick = () => { lp.stations.push({ code:"", name:"", ics:[] }); syncTextFromLive(); renderEditorRows(); render(); };
+  addBtn.type = "button"; addBtn.className = "addBtn"; addBtn.textContent = opts.addLabel || "+ Add station";
+  addBtn.onclick = () => { item.stations.push({ code:"", name:"", ics:[] }); syncTextFromLive(); renderEditorRows(); render(); };
   wrap.appendChild(addBtn);
 
   return wrap;
+}
+
+function trunkEndType(at){
+  if ((live.wyes || []).some(wy => wy.at === at)) return "wye";
+  if ((live.loops || []).some(lp => lp.at === at)) return "loop";
+  return "none";
+}
+/* Start/End is a single slot per end: None / Balloon loop / Wye. Switching
+   type always clears out whichever OTHER type previously occupied this
+   end first, so a loop and a wye can never both sit at the same end at
+   once (the text syntax itself doesn't enforce that, but the Editor's
+   selector does). */
+function setTrunkEndType(at, type){
+  live.loops = (live.loops || []).filter(lp => lp.at !== at);
+  live.wyes = (live.wyes || []).filter(wy => wy.at !== at);
+  if (type === "loop"){
+    live.loops.push({ at, colour:null, stations:[{ code:"", name:"", ics:[] }] });
+  } else if (type === "wye"){
+    live.wyes.push({
+      at,
+      a:{ colour:null, stations:[{ code:"", name:"", ics:[] }] },
+      b:{ colour:null, stations:[{ code:"", name:"", ics:[] }] }
+    });
+  }
+  syncTextFromLive(); renderEditorRows(); render();
+}
+/* "a"/"b" are the wye's own orientation-neutral internal names — up/left
+   on screen for "a", down/right for "b" — matching whichever vocabulary
+   the branch direction dropdown already uses for the current layout. */
+function wyeArmLabel(armKey){
+  const vertical = S.layout.value === "vertical";
+  if (vertical) return armKey === "a" ? "Left" : "Right";
+  return armKey === "a" ? "Up" : "Down";
+}
+
+function makeTrunkEndBlock(at){
+  const wrap = document.createElement("div");
+  wrap.className = "branchBlock";
+
+  const topRow = document.createElement("div");
+  topRow.className = "branchTopRow";
+  const label = document.createElement("span");
+  label.className = "branchGroupLabel";
+  label.textContent = at === "start" ? "Start" : "End";
+  topRow.appendChild(label);
+
+  const type = trunkEndType(at);
+  const typeSel = document.createElement("select");
+  typeSel.className = "brDir";
+  typeSel.innerHTML = `<option value="none">None</option><option value="loop">Balloon loop</option><option value="wye">Wye</option>`;
+  typeSel.value = type;
+  typeSel.onchange = () => setTrunkEndType(at, typeSel.value);
+  topRow.appendChild(typeSel);
+  wrap.appendChild(topRow);
+
+  if (type === "loop"){
+    const lp = live.loops.find(l => l.at === at);
+    wrap.appendChild(makeStationGroupBlock(lp, { addLabel:"+ Add station to loop" }));
+  } else if (type === "wye"){
+    const wy = live.wyes.find(w => w.at === at);
+    ["a", "b"].forEach(armKey => {
+      const armWord = wyeArmLabel(armKey);
+      wrap.appendChild(makeStationGroupBlock(wy[armKey], { label:armWord, addLabel:`+ Add station to ${armWord.toLowerCase()} arm` }));
+    });
+  }
+
+  return wrap;
+}
+
+function renderTrunkEnds(){
+  const c = $("trunkEndsContainer");
+  c.innerHTML = "";
+  c.appendChild(makeTrunkEndBlock("start"));
+  c.appendChild(makeTrunkEndBlock("end"));
 }
 
 function renderEditorRows(){
@@ -3165,9 +3228,7 @@ function renderEditorRows(){
   bc.innerHTML = "";
   live.branches.forEach((b, i) => bc.appendChild(makeBranchBlock(b, i)));
 
-  const lc = $("loopsContainer");
-  lc.innerHTML = "";
-  (live.loops || []).forEach((lp, i) => lc.appendChild(makeLoopBlock(lp, i)));
+  renderTrunkEnds();
 }
 
 function setMode(next){
@@ -3577,11 +3638,6 @@ $("addBranchBtn").onclick = () => {
     dir: S.layout.value === "vertical" ? "right" : "down",
     colour: null, stations: [{ code:"", name:"", ics:[] }]
   });
-  syncTextFromLive(); renderEditorRows(); render();
-};
-$("addLoopBtn").onclick = () => {
-  if (!live.loops) live.loops = [];
-  live.loops.push({ at:"end", colour:null, stations:[{ code:"", name:"", ics:[] }] });
   syncTextFromLive(); renderEditorRows(); render();
 };
 $("addLineInfoBtn").onclick = () => {
