@@ -923,10 +923,10 @@ function buildDiagram(cfg){
      that logic breaks down once BOTH sides are taken. Horizontal layout
      only: "up"/"down" isn't a meaningful pairing on a vertical or loop
      trunk, where branches instead sit left/right of the trunk itself. */
-  const junctionDirs = new Map();   // trunk index -> { up, down }
-  const markJunctionDir = (idx, isUp) => {
-    const e = junctionDirs.get(idx) || { up:false, down:false };
-    if (isUp) e.up = true; else e.down = true;
+  const junctionDirs = new Map();   // trunk index -> { up, down, downGrowLeft }
+  const markJunctionDir = (idx, isUp, growLeft) => {
+    const e = junctionDirs.get(idx) || { up:false, down:false, downGrowLeft:false };
+    if (isUp) e.up = true; else { e.down = true; e.downGrowLeft = !!growLeft; }
     junctionDirs.set(idx, e);
   };
   if (cfg.layout === "horizontal"){
@@ -936,12 +936,13 @@ function buildDiagram(cfg){
       let j = nodes.findIndex((n, i) => i < trunkCount &&
         ((n.code || "").toUpperCase() === key || (n.name || "").toUpperCase() === key));
       if (j < 0) j = trunkCount - 1;
-      markJunctionDir(j, b.dir === "up");
+      markJunctionDir(j, b.dir === "up", b.grow === "left");
     });
     (wyes || []).forEach(wy => {
       const idx = wy.at === "start" ? 0 : trunkCount - 1;
-      if (wy.a && wy.a.stations.length) markJunctionDir(idx, true);
-      if (wy.b && wy.b.stations.length) markJunctionDir(idx, false);
+      const growLeft = wy.at === "start";   // a wye's own arms grow away from the trunk: left at "start", right at "end"
+      if (wy.a && wy.a.stations.length) markJunctionDir(idx, true, growLeft);
+      if (wy.b && wy.b.stations.length) markJunctionDir(idx, false, growLeft);
     });
   }
   /* tag the actual junction nodes directly (rather than re-deriving trunk
@@ -951,7 +952,7 @@ function buildDiagram(cfg){
      centred under the station the usual way would sit right on top of it. */
   junctionDirs.forEach((dirs, idx) => {
     const n = nodes[idx];
-    if (n){ n.branchUp = dirs.up; n.branchDown = dirs.down; }
+    if (n){ n.branchUp = dirs.up; n.branchDown = dirs.down; n.branchDownGrowLeft = dirs.downGrowLeft; }
   });
 
   /* ---- pre-scan: reach of each wye arm along the trunk's own axis, so an
@@ -1628,10 +1629,13 @@ function buildDiagram(cfg){
         const iy = (dir[1] >= 0 ? edgeY + gap : edgeY - gap - busSize);
         /* a down-going branch/wye-arm runs straight down through n.x for a
            long stretch, so centring the icon there the usual way would sit
-           right on top of it — slide it out to the caplet stack's own
-           right edge (the bottom-right corner) instead of straight below. */
+           right on top of it — slide it out to the *first* caplet's own
+           edge instead (ignoring any other, possibly wider, IC caplets
+           stacked below it), on whichever side the branch itself ISN'T
+           headed toward: opposite its own grow direction, so the icon and
+           the branch's own curve/stations never end up on the same side. */
         const ix = (n.branchDown && dir[1] > 0 && ownCapletBox)
-          ? ownCapletBox.x + ownCapletBox.w + gap
+          ? (n.branchDownGrowLeft ? ownCapletBox.x + ownCapletBox.w + gap : ownCapletBox.x - gap - busSize)
           : n.x - busSize/2;
         el("use", { href:"#busIcon", x:F2(ix), y:F2(iy), width:F2(busSize), height:F2(busSize) }, gLabels);
         bb.rect(ix, iy, busSize, busSize);
@@ -2101,11 +2105,11 @@ NW4  University        {proposed}
 NW3  West Coast        > CR18, WP4 {proposed}
 NW2  Pandan Reservoir  {proposed}
 NW1  Jurong Town Hall  {proposed}
-NS1  Jurong East        > EW24, JE5, BUS
+NS1  Jurong East        > EW24, JE5(until:future), JE6(proposed), BUS
 NS2  Bukit Batok        > BUS
 NS3  Bukit Gombak
 NS3A Brickland          {future}
-NS4  Choa Chu Kang      > JS1, BP1, BUS
+NS4  Choa Chu Kang      > JS1(until:future), JN8(proposed), BP1, BUS
 NS5  Yew Tee
 NS6  Sungei Kadut       > DE2 {future}
 NS7  Kranji
@@ -2144,7 +2148,7 @@ EW28 Pioneer
 EW27 Boon Lay              > JS8(until:future), JW5(proposed), BUS
 EW26 Lakeside           > WP1
 EW25 Chinese Garden
-EW24 Jurong East        > NS1, JE5, BUS
+EW24 Jurong East        > NS1, JE5(until:future), JE6(proposed), BUS
 EW23 Clementi              > CR17, BUS
 EW22 Dover
 EW21 Buona Vista        > CC22, BT5!
@@ -2355,7 +2359,7 @@ TE31 Sungei Bedok       > DT37 {future}`
        Service B anti-clockwise via Petir) that rejoins the same station
        rather than reaching a separate terminus. */
     name:"Bukit Panjang LRT", code:"BP", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
-    spec:`BP1  Choa Chu Kang      > NS4, JS1, BUS
+    spec:`BP1  Choa Chu Kang      > NS4, JS1(until:future), JN8(proposed), BUS
 BP2  South View
 BP3  Keat Hong
 BP4  Teck Whye
@@ -2444,7 +2448,7 @@ FV12 Serangoon North    > CR9 {proposed}`
        considered Transport Manifesto 50 alignment info is given. */
     name:"Seletar-Tengah Line", code:"STL", colour:"#e8467c", layout:"horizontal",
     spec:`# SPECULATIVE fan concept map, not an official LTA line — replace freely
-ST1  Tengah              > JS3
+ST1  Tengah              > JS3(until:future), JN5(proposed)
 ST2  Brickworks
 ST3  Bukit Batok         > NS2
 ST4  Burgundy
@@ -2534,10 +2538,10 @@ CT50 | Beach Central`
     name:"Holland-Long Island Line", code:"HLL", colour:"#e8467c", layout:"horizontal",
     spec:`# STC proposal — core corridor only; the Long Island reclamation extension
 # and TEL2HLL conversion tail lie beyond this Plan's 2050 scope
-HL1  Tawas               > JW2 {proposed}
+HL1  Tawas               > JW8 {proposed}
 HL2  Bulim               {proposed}
 HL3  Innovation District {proposed}
-HL4  Tengah              > JS3 {proposed}
+HL4  Tengah              > JN5 {proposed}
 HL5  Brickworks          {proposed}
 HL6  Bukit Batok         > NS2 {proposed}
 HL7  Burgundy            {proposed}
@@ -2677,45 +2681,98 @@ NC12 Attap Valley         {proposed}
 NC13 Woodlands North      > TE1, RTS {sir,proposed}`
   },
   jrl:{
-    /* Jurong Region Line — under construction, phased opening from mid-2028.
-       Trunk runs Bahar Junction (JS7) down to Choa Chu Kang (JS1); JE
-       (Tengah/Jurong East spur) branches off Tengah (JS3) as a shuttle.
-       At the Bahar Junction end the line forks into a true wye: JW
-       (Gek Poh...Peng Kang Hill, the NTU spur) as the up arm, JS8-12
-       (Boon Lay...Jurong Pier) as the down arm. */
+    /* Jurong Region Line — future tier is the under-construction scheme
+       (phased opening from mid-2028): trunk Bahar Junction (JS7) down to
+       Choa Chu Kang (JS1); JE (Tengah/Jurong East spur) branches off
+       Tengah (JS3) as a shuttle; the Bahar Junction end forks into a true
+       wye (JW as the up arm, JS8-12 as the down arm).
+
+       Proposed tier is a full renumbering/restructuring (JN/JE/JW), each
+       physical station duplicated as an {until:future} entry under its
+       old code and a {proposed} entry under its new one (same pattern as
+       the Circle Line's CC32/CC1 Prince Edward Road renumbering above) so
+       the two schemes never collide at any single tier:
+         - Forest Hill (JN6) is a brand new intermediate station with no
+           future-tier equivalent.
+         - Choa Chu Kang (JS1, the future trunk's own terminus) is demoted
+           to a single-station wye arm (JN8) off Choa Chu Kang West (JN7)
+           instead of continuing the trunk directly.
+         - The Bahar Junction wye (future) becomes two ordinary shuttle
+           branches off JN1 instead (JW7-11 up-left, JW1-5 down-left), and
+           a *new* wye appears at the other end (JN7) instead. */
     name:"Jurong Region Line", code:"JRL", colour:"#0099aa", layout:"horizontal",
     spacing:80, branchSpacing:170,
     spec:`# Under construction — JS/JW mid-2028, JE 2028, JS9-12/JW3-5 2029
-JS7  Bahar Junction
-JS6  Jurong West
-JS5  Corporation
-JS4  Hong Kah
-JS3  Tengah
-JS2  Choa Chu Kang West
-JS1  Choa Chu Kang       > NS4, BP1
+JS7  Bahar Junction      {until:future}
+JN1  Bahar Junction      {proposed}
+JS6  Jurong West         {until:future}
+JN2  Jurong West         {proposed}
+JS5  Corporation         {until:future}
+JN3  Corporation         {proposed}
+JS4  Hong Kah            {until:future}
+JN4  Hong Kah            {proposed}
+JS3  Tengah              > BUS {until:future}
+JN5  Tengah              > HL4, BUS {proposed}
+JN6  Forest Hill         {proposed}
+JS2  Choa Chu Kang West  {until:future}
+JN7  Choa Chu Kang West  {proposed}
+JS1  Choa Chu Kang       > NS4, BP1, BUS {until:future}
 
-[branch from JS3 down shuttle]
+[branch from JS3 down shuttle] {until:future}
 JE1  Tengah Plantation
 JE2  Tengah Park
 JE3  Bukit Batok West
 JE4  Toh Guan
-JE5  Jurong East         > NS1, EW24
+JE5  Jurong East         > NS1, EW24, BUS
 JE6  Jurong Town Hall
 JE7  Pandan Reservoir
 
-[wye start up]
+[wye start up] {until:future}
 JW1  Gek Poh
 JW2  Tawas
 JW3  Nanyang Gateway
 JW4  Nanyang Crescent
 JW5  Peng Kang Hill
 
-[wye start down]
-JS8  Boon Lay            > EW27
+[wye start down] {until:future}
+JS8  Boon Lay            > EW27, BUS
 JS9  Enterprise
 JS10 Tukang
 JS11 Jurong Hill
-JS12 Jurong Pier`
+JS12 Jurong Pier
+
+[branch from JN5 down shuttle JE1] {proposed}
+JE2  Tengah Plantation   {proposed}
+JE3  Tengah Park         {proposed}
+JE4  Bukit Batok West    {proposed}
+JE5  Toh Guan            {proposed}
+JE6  Jurong East         > NS1, EW24, BUS {proposed}
+JE7  Jurong Lake District > CR19, WP3!, HSR* {proposed}
+JE8  Teban Gardens       {proposed}
+JE9  Penjuru             {proposed}
+JE10 Jalan Buroh         {proposed}
+
+[branch from JN1 up left shuttle JW6] {proposed}
+JW7  Gek Poh             {proposed}
+JW8  Tawas               > HL1 {proposed}
+JW9  Nanyang Gateway     {proposed}
+JW10 Nanyang Crescent    {proposed}
+JW11 Peng Kang Hill      {proposed}
+
+[branch from JN1 down left shuttle] {proposed}
+JW5  Boon Lay            > EW27, BUS {proposed}
+JW4  Enterprise          {proposed}
+JW3  Tukang              {proposed}
+JW2  Jurong Hill         {proposed}
+JW1  Jurong Pier         > CR21 {proposed}
+
+[wye end up] {proposed}
+JN8  Choa Chu Kang       > NS4, BUS {proposed}
+
+[wye end down] {proposed}
+JN9  Keat Hong           {proposed}
+JN10 Teck Whye           {proposed}
+JN11 Bukit Panjang       > DT9, BT9!, BP6*, BUS {proposed}`
   },
   crl:{
     /* Cross Island Line — under construction. Phase 1 targeted 2030,
