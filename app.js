@@ -1889,6 +1889,7 @@ const PRESET_GROUPS = [
     { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680", tier:"proposed" },
     { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000", tier:"proposed" },
     { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#4d91ba", tier:"proposed" },
+    { key:"fvlrt", acr:"FV", label:"Fernvale LRT", colour:"#718573", tier:"proposed" },
   ]},
   { name:"Other", items:[
     { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c", tier:"proposed" },
@@ -2234,9 +2235,9 @@ SE5  Ranggung
 [loop at end]
 SW1  Cheng Lim
 SW2  Farmway
-SW3  Kupang
-SW4  Thanggam
-SW5  Fernvale
+SW3  Kupang             > FV7 {proposed}
+SW4  Thanggam           > FV8 {proposed}
+SW5  Fernvale           > FV9 {proposed}
 SW6  Layar
 SW7  Tongkang
 SW8  Renjong`
@@ -2260,10 +2261,28 @@ PE7  Damai
 PW1  Sam Kee
 PW2  Teck Lee
 PW3  Punggol Point
-PW4  Samudera
-PW5  Nibong
-PW6  Sumang
-PW7  Soo Teck`
+PW4  Samudera           > FV2 {proposed}
+PW5  Nibong             > FV3 {proposed}
+PW6  Sumang             > FV4 {proposed}
+PW7  Soo Teck           > FV5 {proposed}`
+  },
+  fvlrt:{
+    /* Fernvale LRT (RMP50 Doc. 50C) — a straight line, not a loop like the
+       other three LRTs: RMP50 lists it as one flat FV1-FV12 sequence with
+       no East/West split at all. */
+    name:"Fernvale LRT", code:"FV", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
+    spec:`FV1  Punggol Coast      > NE18, WP24 {proposed}
+FV2  Samudera           > PW4 {proposed}
+FV3  Nibong             > PW5 {proposed}
+FV4  Sumang             > PW6 {proposed}
+FV5  Soo Teck           > PW7 {proposed}
+FV6  Matilda            {proposed}
+FV7  Kupang             > SW3 {proposed}
+FV8  Thanggam           > SW4 {proposed}
+FV9  Fernvale           > SW5, ER13 {proposed}
+FV10 Lor Buang Kok      {proposed}
+FV11 Buangkok Green     {proposed}
+FV12 Serangoon North    > CR9 {proposed}`
   },
   stl:{
     /* SPECULATIVE — not an official LTA project. Transcribed from a fan
@@ -2558,7 +2577,7 @@ CR13 Bright Hill         > TE7
 CR12 Teck Ghee
 CR11 Ang Mo Kio          > NS16
 CR10 Tavistock
-CR9  Serangoon North
+CR9  Serangoon North    > FV12 {proposed}
 CR8  Hougang             > NE14
 CR7  Defu
 CR6  Tampines North
