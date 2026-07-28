@@ -35,7 +35,7 @@ const LINE_INFO = {
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
   RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS", tier:"future" },
-  FV:{ name:"Fernvale LRT", colour:"#718573", acr:"FV", tier:"future" },
+  FV:{ name:"Fernvale LRT", colour:"#718573", acr:"FV", tier:"proposed" },
   HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL", tier:"proposed" },
   WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR", tier:"proposed" },
   SL:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" }, SP:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" },
@@ -3826,6 +3826,11 @@ applyTheme(savedTheme || (window.matchMedia && window.matchMedia("(prefers-color
     document.body.style.userSelect = "";
     const w = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w").trim();
     try { localStorage.setItem("sidebarWidth", parseInt(w, 10)); } catch (e){}
+  });
+  const SIDEBAR_W_DEFAULT = 440;
+  resizer.addEventListener("dblclick", () => {
+    document.documentElement.style.setProperty("--sidebar-w", SIDEBAR_W_DEFAULT + "px");
+    try { localStorage.setItem("sidebarWidth", SIDEBAR_W_DEFAULT); } catch (e){}
   });
 
   /* Collapse — hides the sidebar entirely, freeing the width for the
