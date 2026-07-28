@@ -227,6 +227,7 @@ function parseSpec(text){
   const trunk = [];
   const branches = [];
   const loops = [];
+  const wyes = [];
   let cursor = trunk;
 
   text.split(/\r?\n/).forEach((raw, i) => {
@@ -261,9 +262,41 @@ function parseSpec(text){
         return;
       }
 
+      /* [wye <start|end> <up|down|left|right>] — an open Y-shaped split of
+         the trunk's own end (unlike a balloon loop, the two arms never
+         reconverge): each splits away from the junction at a literal 45°
+         diagonal, then straightens out to run parallel with the trunk's
+         own reading direction — long branches stay flat instead of making
+         the whole diagram grow tall. up/down name the arms on a
+         horizontal trunk, left/right on a vertical one; either vocabulary
+         is accepted regardless of orientation (up==left, down==right
+         internally) so a spec written for one orientation still parses
+         if you later switch. Two headers sharing the same "at" (one
+         up/left, one down/right) make up one wye — each arm keeps its own
+         station list, colour, and roadmap tier, independent of the other. */
+      const wyeM = /^\[\s*wye\s+(start|end)\s+(up|down|left|right)\s*(.*?)\s*\]$/i.exec(sTagStripped);
+      if (wyeM){
+        const at = wyeM[1].toLowerCase();
+        const arm = /^(up|left)$/i.test(wyeM[2]) ? "a" : "b";
+        let rest = wyeM[3];
+        let colour = null;
+        const colonIdx = rest.indexOf(":");
+        if (colonIdx >= 0){
+          const tail = rest.slice(colonIdx + 1).trim();
+          const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(tail);
+          if (cm) colour = cm[1];
+        }
+        let wy = wyes.find(w => w.at === at);
+        if (!wy){ wy = { at, a:null, b:null, line:i+1 }; wyes.push(wy); }
+        const armObj = { colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
+        wy[arm] = armObj;
+        cursor = armObj.stations;
+        return;
+      }
+
       const m = /^\[\s*branch\s+from\s+([^\s,;\]]+)\s*(.*?)\s*\]$/i.exec(sTagStripped);
       if (!m){
-        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code> or <code>[loop at start/end]</code>`);
+        errors.push(`Line ${i+1}: expected <code>[branch from CODE up shuttle CP1 orthogonal: #hex]</code>, <code>[loop at start/end]</code>, or <code>[wye start/end up/down]</code>`);
         return;
       }
       const from = m[1];
@@ -333,28 +366,32 @@ function parseSpec(text){
     cursor.push(parseStation(s));
   });
 
-  if (!trunk.length && (branches.length || loops.length))
-    errors.push("A branch/loop header appeared before any trunk stations.");
+  if (!trunk.length && (branches.length || loops.length || wyes.length))
+    errors.push("A branch/loop/wye header appeared before any trunk stations.");
 
-  return { trunk, branches, loops, errors };
+  return { trunk, branches, loops, wyes, errors };
 }
 
-/* Trims a parsed {trunk, branches, loops} down to what the given roadmap
-   tier should show — drops individual future/proposed-tagged stations from
-   the trunk, and drops whole branches/loops whose own header is tagged past
-   the active tier (along with their stations; a kept branch/loop still has
-   its own stations filtered the same way). */
-function filterByTier(trunk, branches, loops, tier){
+/* Trims a parsed {trunk, branches, loops, wyes} down to what the given
+   roadmap tier should show — drops individual future/proposed-tagged
+   stations from the trunk, and drops whole branches/loops/wye-arms whose
+   own header is tagged past the active tier (along with their stations; a
+   kept branch/loop/arm still has its own stations filtered the same way).
+   A wye's two arms are independent — one can survive without the other,
+   and the whole wye only disappears once both are gone. */
+function filterByTier(trunk, branches, loops, wyes, tier){
   const rank = TIER_RANK[tier] ?? TIER_RANK.current;
   const allow = st => {
     if (TIER_RANK[st.tier || "current"] > rank) return false;
     if (st.until && rank > TIER_RANK[st.until]) return false;
     return true;
   };
+  const allowArm = arm => arm && allow(arm) ? { ...arm, stations:arm.stations.filter(allow) } : null;
   return {
     trunk: trunk.filter(allow),
     branches: branches.filter(allow).map(b => ({ ...b, stations: b.stations.filter(allow) })),
-    loops: (loops || []).filter(allow).map(lp => ({ ...lp, stations: lp.stations.filter(allow) }))
+    loops: (loops || []).filter(allow).map(lp => ({ ...lp, stations: lp.stations.filter(allow) })),
+    wyes: (wyes || []).map(wy => ({ ...wy, a:allowArm(wy.a), b:allowArm(wy.b) })).filter(wy => wy.a || wy.b)
   };
 }
 
@@ -620,7 +657,7 @@ function racetrack(x0, y0, x1, y1, r, vertical){
    Returns { svg, width, height }. All paint attributes are inline so the
    serialised SVG stands alone for download / PNG conversion. */
 function buildDiagram(cfg){
-  const { trunk, branches, loops } = cfg;
+  const { trunk, branches, loops, wyes } = cfg;
   const colour = cfg.colour;
   const textColour = cfg.dark ? "#e8eaed" : STYLE.nameFill;
   const bgColour = cfg.dark ? "#15181c" : "#ffffff";
@@ -1148,6 +1185,66 @@ function buildDiagram(cfg){
       else { const j = i - rowACount; p = across(along(buf + curveRun + rowBuf + (rowBCount - 1 - j) * sp), r); onRowA = false; }
       const rowLabel = axisHoriz ? LOOPLABEL : (onRowA ? LOOP_LEFT : LOOP_RIGHT);
       nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:rowLabel, kind:"", loop:lp });
+    });
+  });
+
+  /* ---- trunk wyes: an open Y-shaped split of the trunk's own end (unlike
+     a balloon loop above, the two arms never reconverge). Each arm leaves
+     the junction on a literal 45° diagonal, then straightens out to run
+     parallel with the trunk's own reading direction — so a long arm with
+     many stations grows the diagram only along its reading axis, never
+     perpendicular to it, the way a smoothly-curved branch would if pushed
+     out far enough. The two arms carry equal visual weight by design (same
+     angle, same line thickness), unlike an ordinary branch, which reads as
+     a lower-priority spur off a continuing trunk. */
+  (wyes || []).forEach(wy => {
+    if (cfg.layout === "loop") return;   // same restriction as balloon loops — no real start/end on a closed loop trunk
+    const jn = wy.at === "start" ? nodes[0] : nodes[trunkCount - 1];
+    if (!jn) return;
+
+    /* same automatic axis/direction detection as a balloon loop: continue
+       the trunk's own reading direction when it has one, otherwise fall
+       back to the diagram's overall orientation. */
+    const neighbour = wy.at === "start" ? nodes[1] : nodes[trunkCount - 2];
+    let axisHoriz, axisSgn;
+    if (neighbour && (neighbour.x !== jn.x || neighbour.y !== jn.y)){
+      const dx = jn.x - neighbour.x, dy = jn.y - neighbour.y;
+      axisHoriz = Math.abs(dx) >= Math.abs(dy);
+      axisSgn = axisHoriz ? (dx >= 0 ? 1 : -1) : (dy >= 0 ? 1 : -1);
+    } else {
+      axisHoriz = cfg.layout !== "vertical";
+      axisSgn = wy.at === "start" ? -1 : 1;
+    }
+    const along = (d) => axisHoriz ? { x: jn.x + axisSgn * d, y: jn.y } : { x: jn.x, y: jn.y + axisSgn * d };
+    const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
+
+    /* Half the final gap between the two arms once parallel — the same
+       offset a single ordinary branch would sit at, so "branch spacing"
+       consistently governs both. A true 45° diagonal needs equal along-
+       and across-axis travel, so the diagonal's own length falls out of
+       this directly (no separate control for it). */
+    const halfGap = branchGap;
+    const cornerRadius = Math.min(40, halfGap * 0.5);
+    const postTurnBuf = Math.min(20, sp * 0.3);   // short straight run after the turn, before the first station
+
+    [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
+      const arm = wy[armKey];
+      if (!arm || !arm.stations.length) return;
+      const bc = arm.colour || colour;
+      const rowPoint = (alongDist) => across(along(alongDist), armSgn * halfGap);
+      const corner = rowPoint(halfGap);
+      const stationPts = arm.stations.map((st, i) => rowPoint(halfGap + postTurnBuf + i * sp));
+      bb.add(corner.x, corner.y);
+      const d = roundedPath([[jn.x, jn.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], cornerRadius);
+      drawBranchLine(d, bc, false);
+
+      const rowLabel = axisHoriz ? DIAG : (armSgn < 0 ? LEFT : RIGHT);
+      arm.stations.forEach((st, i) => {
+        const p = stationPts[i];
+        nodes.push({ ...st, x:p.x, y:p.y, colour:bc, label:rowLabel,
+                     kind: i === arm.stations.length - 1 ? "term" : "", wye:wy });
+        if (!axisHoriz) verticalLineXs.push(p.x);
+      });
     });
   });
 
@@ -2447,7 +2544,7 @@ MB2  Branch Terminus`
    lose focus. Text mode just uses S.spec.value directly, like before;
    switching Editor -> Text serialises `live`, Text -> Editor re-parses it. */
 let mode = "editor";                 // 'editor' | 'text'
-let live = { trunk:[], branches:[], loops:[] };
+let live = { trunk:[], branches:[], loops:[], wyes:[] };
 let dragCtx = null;
 
 function esc(s){
@@ -2564,6 +2661,20 @@ function loopHeaderText(lp){
   s += tagSuffix(lp.tier, false, lp.until);
   return s;
 }
+/* One header per arm (armKey "a"/"b") — up/down on a horizontal trunk,
+   left/right on a vertical one, matching whichever vocabulary the branch
+   direction dropdown already uses for the current layout. */
+function wyeArmHeaderText(wy, armKey){
+  const armWord = S.layout.value === "vertical"
+    ? (armKey === "a" ? "left" : "right")
+    : (armKey === "a" ? "up" : "down");
+  const arm = wy[armKey];
+  let s = `[wye ${wy.at || "end"} ${armWord}`;
+  if (arm.colour) s += `: ${arm.colour}`;
+  s += "]";
+  s += tagSuffix(arm.tier, false, arm.until);
+  return s;
+}
 function syncTextFromLive(){
   const lines = live.trunk.map(stLineText);
   live.branches.forEach(b => {
@@ -2576,6 +2687,15 @@ function syncTextFromLive(){
     lines.push(loopHeaderText(lp));
     lp.stations.forEach(st => lines.push(stLineText(st)));
   });
+  (live.wyes || []).forEach(wy => {
+    ["a", "b"].forEach(armKey => {
+      const arm = wy[armKey];
+      if (!arm) return;
+      lines.push("");
+      lines.push(wyeArmHeaderText(wy, armKey));
+      arm.stations.forEach(st => lines.push(stLineText(st)));
+    });
+  });
   S.spec.value = lines.join("\n");
 }
 function setLiveFromText(text){
@@ -2583,15 +2703,16 @@ function setLiveFromText(text){
   live.trunk = parsed.trunk;
   live.branches = parsed.branches;
   live.loops = parsed.loops;
+  live.wyes = parsed.wyes;
   return parsed.errors;
 }
 
 function currentTrunkBranches(){
   if (mode === "text"){
     const parsed = parseSpec(S.spec.value);
-    return { trunk:parsed.trunk, branches:parsed.branches, loops:parsed.loops, errors:parsed.errors };
+    return { trunk:parsed.trunk, branches:parsed.branches, loops:parsed.loops, wyes:parsed.wyes, errors:parsed.errors };
   }
-  return { trunk:live.trunk, branches:live.branches, loops:live.loops || [], errors:[] };
+  return { trunk:live.trunk, branches:live.branches, loops:live.loops || [], wyes:live.wyes || [], errors:[] };
 }
 
 function readForm(){
@@ -2600,7 +2721,7 @@ function readForm(){
      roadmap tier — only the rendered diagram (and the preset picker,
      separately) respects the toggle, so tags don't make rows unexpectedly
      vanish while you're editing. */
-  const { trunk, branches, loops } = filterByTier(parsed.trunk, parsed.branches, parsed.loops, globalTier);
+  const { trunk, branches, loops, wyes } = filterByTier(parsed.trunk, parsed.branches, parsed.loops, parsed.wyes, globalTier);
   return {
     name:S.name.value.trim(), code:S.code.value.trim().toUpperCase(),
     colour:S.colour.value, layout:S.layout.value,
@@ -2612,7 +2733,7 @@ function readForm(){
     opaque:S.opaque.checked,
     dark: diagramDark,
     tierRank: TIER_RANK[globalTier] ?? TIER_RANK.current,
-    trunk, branches, loops, errors:parsed.errors
+    trunk, branches, loops, wyes, errors:parsed.errors
   };
 }
 
