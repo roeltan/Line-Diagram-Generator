@@ -1168,14 +1168,18 @@ function buildDiagram(cfg){
     } else { /* horizontal */
       /* both above AND below are taken (an up branch and a down branch on
          the very same junction) — neither DIAG nor BELOW is free, so the
-         name has to move off to the side instead: outward (LEFT/RIGHT) if
-         this junction is a trunk terminus, or the top-right corner (DIAG
-         is already exactly that) if it's an intermediate station, since
-         the trunk itself already occupies dead ahead on both sides. */
+         name has to move off to the side instead: outward (LOOP_LEFT/
+         LOOP_RIGHT) if this junction is a trunk terminus, or the top-right
+         corner (DIAG is already exactly that) if it's an intermediate
+         station, since the trunk itself already occupies dead ahead on
+         both sides. LOOP_LEFT/RIGHT rather than plain LEFT/RIGHT — this is
+         still a horizontal trunk, so the interchange caplets should keep
+         growing straight down (codeDir [0,1]), not sideways alongside the
+         name the way an actual vertical-layout branch station's would. */
       const dirs = junctionDirs.get(j);
       if (dirs && dirs.up && dirs.down){
-        if (j === 0) jn.label = LEFT;
-        else if (j === trunkCount - 1) jn.label = RIGHT;
+        if (j === 0) jn.label = LOOP_LEFT;
+        else if (j === trunkCount - 1) jn.label = LOOP_RIGHT;
         // else: leave the default DIAG (top-right corner) in place
       } else if (b.dir === "up"){
         jn.label = BELOW;   // keep the name clear of the branch line above
@@ -1339,12 +1343,14 @@ function buildDiagram(cfg){
     const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
 
     /* a wye only ever sits at a trunk terminus (never mid-trunk), so once
-       both arms exist there's nowhere left but the side — same LEFT/RIGHT
-       move an ordinary branch pair gets at a terminus junction, above. */
+       both arms exist there's nowhere left but the side — same LOOP_LEFT/
+       LOOP_RIGHT move an ordinary branch pair gets at a terminus junction,
+       above (codes still grow straight down, unlike a genuine vertical-
+       layout branch station's sideways-growing LEFT/RIGHT). */
     if (axisHoriz){
       const jnIdx = wy.at === "start" ? 0 : trunkCount - 1;
       const dirs = junctionDirs.get(jnIdx);
-      if (dirs && dirs.up && dirs.down) jn.label = (wy.at === "start") ? LEFT : RIGHT;
+      if (dirs && dirs.up && dirs.down) jn.label = (wy.at === "start") ? LOOP_LEFT : LOOP_RIGHT;
       else if (dirs && dirs.up) jn.label = BELOW;
     }
 
