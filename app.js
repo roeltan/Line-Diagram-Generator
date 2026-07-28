@@ -1925,7 +1925,7 @@ const EXAMPLES = {
 NW12 Marina South Pier > NS28 {proposed}
 NW11 Keppel Wharves    {proposed}
 NW10 Brani Resort      > SL16 {proposed}
-NW9  Keppel            > NE2, CC30 {proposed}
+NW9  Keppel            > NE2(proposed), CC30 {proposed}
 NW8  Bukit Merah       > BT2, BUS {proposed}
 NW7  Portsdown         {proposed}
 NW6  Kent Ridge        > CC24 {proposed}
@@ -1971,36 +1971,36 @@ EW34 Tuas Frontier       > CR26 {proposed}
 EW33 Tuas Link
 EW32 Tuas West Road
 EW31 Tuas Crescent
-EW30 Gul Circle
+EW30 Gul Circle         > ES2, CR24
 EW29 Joo Koon             > BUS
 EW28 Pioneer
-EW27 Boon Lay              > JS8, BUS
-EW26 Lakeside
+EW27 Boon Lay              > JS8(until:future), JW5(proposed), BUS
+EW26 Lakeside           > WP1
 EW25 Chinese Garden
 EW24 Jurong East        > NS1, JE5, BUS
 EW23 Clementi              > CR17, BUS
 EW22 Dover
-EW21 Buona Vista        > CC22
+EW21 Buona Vista        > CC22, BT5!
 EW20 Commonwealth
 EW19 Queenstown
 EW18 Redhill
 EW17 Tiong Bahru
 EW16 Outram Park        > NE3, TE17
 EW15 Tanjong Pagar
-EW14 Raffles Place      > NS26
+EW14 Raffles Place      > NS26, SL12^
 EW13 City Hall          > NS25
 EW12 Bugis              > DT14
 EW11 Lavender
 EW10 Kallang               > BUS(future)
-EW9  Aljunied
-EW8  Paya Lebar         > CC9
+EW9  Aljunied           > WP15
+EW8  Paya Lebar         > CC9, CJ
 EW7  Eunos                 > BUS
 EW6  Kembangan
-EW5  Bedok                 > BUS
-EW4  Tanah Merah
+EW5  Bedok                 > ER4, BUS
+EW4  Tanah Merah        > HL32
 EW3  Simei
 EW2  Tampines           > DT32*, BUS
-EW1  Pasir Ris             > CR5, BUS
+EW1  Pasir Ris             > CR5, CP1, NC1!, BUS
 
 [branch from EW4 down shuttle CG] {until:future}
 CG1  Expo               > DT35
@@ -2032,37 +2032,37 @@ ES7  Tuas Port Gate                {proposed}`
        its current code and a {proposed} entry under its new one), so the
        two never actually collide at any single tier. */
     name:"Circle Line", code:"CCL", colour:"#fa9e0d", layout:"loop", spacing:104, closed:true,
-    spec:`CC26 Pasir Panjang
+    spec:`CC26 Pasir Panjang      > NP3, WP8!
 CC25 Haw Par Villa
-CC24 Kent Ridge
+CC24 Kent Ridge         > NW6
 CC23 one-north
-CC22 Buona Vista        > EW21
-CC21 Holland Village
+CC22 Buona Vista        > EW21, BT5!
+CC21 Holland Village    > HL10
 CC20 Farrer Road
 CC19 Botanic Gardens    > DT9
 CC17 Caldecott          > TE9
 CC16 Marymount
 CC15 Bishan             > NS17
-CC14 Lorong Chuan
+CC14 Lorong Chuan       > SL6
 CC13 Serangoon          > NE12, BUS
-CC12 Bartley
+CC12 Bartley            > WP17
 CC11 Tai Seng
 CC10 MacPherson         > DT26
-CC9  Paya Lebar         > EW8
+CC9  Paya Lebar         > EW8, CJ
 CC8  Dakota
-CC7  Mountbatten
+CC7  Mountbatten        > WP14
 CC6  Stadium
 CC5  Nicoll Highway
-CC4  Promenade          > DT15
+CC4  Promenade          > DT15, HL17
 CC34 Bayfront           > DT16 {until:future}
 CC3  Bayfront           > DT16 {proposed}
 CC33 Marina Bay         > NS27, TE20 {until:future}
 CC2  Marina Bay         > NS27, TE20 {proposed}
 CC32 Prince Edward Road {until:future}
-CC1  Prince Edward Road {proposed}
-CC31 Cantonment
-CC30 Keppel
-CC29 HarbourFront       > NE1, EW17, BUS
+CC1  Prince Edward Road > SL14 {proposed}
+CC31 Cantonment         > BT1
+CC30 Keppel             > NE2(proposed), NW9
+CC29 HarbourFront       > NE1, WP9, BUS
 CC28 Telok Blangah
 CC27 Labrador Park
 
@@ -2080,26 +2080,27 @@ CJ3  Parkway           > HL21 {proposed}`
   ne:{
     name:"North East Line", code:"NEL", colour:"#9900aa", layout:"horizontal",
     spec:`# STC proposal, not an official LTA project
-NP3  Pasir Panjang      > CC26 {proposed}
+NP3  Pasir Panjang      > CC26, WP8! {proposed}
 NP2  Power District     {proposed}
 NP1  Berlayer           {proposed}
-NE1  HarbourFront        > CC29, BUS
+NE1  HarbourFront        > CC29, WP9, BUS
+NE2  Keppel             > CC30, NW9 {proposed}
 NE3  Outram Park        > EW16, TE17
 NE4  Chinatown          > DT19
 NE5  Clarke Quay
-NE6  Dhoby Ghaut        > NS24, CC1
+NE6  Dhoby Ghaut        > NS24, CC1(until:future), HL14(proposed)
 NE7  Little India       > DT12
-NE8  Farrer Park
+NE8  Farrer Park        > SL9
 NE9  Boon Keng
 NE10 Potong Pasir
 NE11 Woodleigh          > BUS
 NE12 Serangoon          > CC13, BUS
 NE13 Kovan
 NE14 Hougang            > CR8, BUS
-NE15 Buangkok           > BUS
+NE15 Buangkok           > ER11, BUS
 NE16 Sengkang           > STC, BUS
-NE17 Punggol            > CP4, PTC, BUS
-NE18 Punggol Coast      > BUS`
+NE17 Punggol            > CP4, NC5!, PTC, BUS
+NE18 Punggol Coast      > WP24, BUS`
   },
   dt:{
     name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal",
