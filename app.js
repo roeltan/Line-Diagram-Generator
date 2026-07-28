@@ -34,7 +34,7 @@ const LINE_INFO = {
   BP:{ name:"Bukit Panjang LRT", colour:"#718573", acr:"BP" },
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
-  RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS", tier:"future" },
+  RTS:{ name:"RTS Link", colour:"#87CEFA", acr:"RTS", tier:"future" },
   FV:{ name:"Fernvale LRT", colour:"#718573", acr:"FV", tier:"proposed" },
   HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL", tier:"proposed" },
   WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR", tier:"proposed" },
@@ -2565,40 +2565,44 @@ NC13 Woodlands North      > TE1, RTS {sir,proposed}`
   },
   jrl:{
     /* Jurong Region Line — under construction, phased opening from mid-2028.
-       JS is the trunk; JW (NTU spur) branches off Bahar Junction (JS7),
-       while JE (Tengah/Jurong East spur) branches off Tengah (JS3) —
-       a real two-branch example, each off a different junction. */
+       Trunk runs Bahar Junction (JS7) down to Choa Chu Kang (JS1); JE
+       (Tengah/Jurong East spur) branches off Tengah (JS3) as a shuttle.
+       At the Bahar Junction end the line forks into a true wye: JW
+       (Gek Poh...Peng Kang Hill, the NTU spur) as the up arm, JS8-12
+       (Boon Lay...Jurong Pier) as the down arm. */
     name:"Jurong Region Line", code:"JRL", colour:"#0099aa", layout:"horizontal",
     spacing:80, branchSpacing:150,
     spec:`# Under construction — JS/JW mid-2028, JE 2028, JS9-12/JW3-5 2029
-JS1  Choa Chu Kang       > NS4, BP1
-JS2  Choa Chu Kang West
-JS3  Tengah
-JS4  Hong Kah
-JS5  Corporation
-JS6  Jurong West
 JS7  Bahar Junction
-JS8  Boon Lay            > EW27
-JS9  Enterprise
-JS10 Tukang
-JS11 Jurong Hill
-JS12 Jurong Pier
+JS6  Jurong West
+JS5  Corporation
+JS4  Hong Kah
+JS3  Tengah
+JS2  Choa Chu Kang West
+JS1  Choa Chu Kang       > NS4, BP1
 
-[branch from JS7 down orthogonal]
-JW1  Gek Poh
-JW2  Tawas
-JW3  Nanyang Gateway
-JW4  Nanyang Crescent
-JW5  Peng Kang Hill
-
-[branch from JS3 up shuttle]
+[branch from JS3 down shuttle]
 JE1  Tengah Plantation
 JE2  Tengah Park
 JE3  Bukit Batok West
 JE4  Toh Guan
 JE5  Jurong East         > NS1, EW24
 JE6  Jurong Town Hall
-JE7  Pandan Reservoir`
+JE7  Pandan Reservoir
+
+[wye start up]
+JW1  Gek Poh
+JW2  Tawas
+JW3  Nanyang Gateway
+JW4  Nanyang Crescent
+JW5  Peng Kang Hill
+
+[wye start down]
+JS8  Boon Lay            > EW27
+JS9  Enterprise
+JS10 Tukang
+JS11 Jurong Hill
+JS12 Jurong Pier`
   },
   crl:{
     /* Cross Island Line — under construction. Phase 1 targeted 2030,
