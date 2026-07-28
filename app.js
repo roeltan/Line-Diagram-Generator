@@ -3700,6 +3700,27 @@ function resetPan(){ panX = currentSidebarWidth(); panY = HEADER_H; applyPan(); 
   });
 })();
 
+/* Arrow keys pan too — same "move the view, not the content" convention
+   as Google Maps' own keyboard controls: Right reveals what's off-screen
+   to the right, which means the diagram itself has to slide left (panX
+   decreases), the opposite sign from a right-drag (which follows the
+   cursor and reveals what's to the *left* instead). Skipped entirely
+   while focus is inside a text field/select — arrow keys have to keep
+   moving the cursor/selection there, not fight it by panning underneath. */
+window.addEventListener("keydown", e => {
+  const ARROW_STEP = 60;
+  const dirs = { ArrowUp:[0,1], ArrowDown:[0,-1], ArrowLeft:[1,0], ArrowRight:[-1,0] };
+  const d = dirs[e.key];
+  if (!d) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable)) return;
+  const step = ARROW_STEP * (e.shiftKey ? 2.5 : 1);
+  panX += d[0] * step;
+  panY += d[1] * step;
+  applyPan();
+  e.preventDefault();
+});
+
 /* ------------------------------------------------------------------ exports */
 /* The page's @font-face points at a local fonts/ file via a <link>
    stylesheet — that reference means nothing once the SVG is exported
