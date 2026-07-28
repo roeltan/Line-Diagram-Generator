@@ -1984,21 +1984,22 @@ function renderLineInfoRows(){
 
     /* drag-to-reorder — same dragCtx pattern as the station rows, just
        operating on `lineOrder` (an array of acr strings) instead of a
-       station-list array. Reference equality on `.arr` keeps a
-       station-row drag and a line-order drag from ever completing
-       against each other. */
+       station-list array. The `kind` tag (rather than reference equality
+       on `.arr`, now that station rows themselves drag freely between
+       different arrays) is what keeps a station-row drag and a
+       line-order drag from ever completing against each other. */
     box.addEventListener("dragstart", () => {
-      dragCtx = { arr:lineOrder, idx:lineOrder.indexOf(group.acr) };
+      dragCtx = { kind:"lineOrder", arr:lineOrder, idx:lineOrder.indexOf(group.acr) };
       box.classList.add("dragging");
     });
     box.addEventListener("dragend", () => box.classList.remove("dragging"));
     box.addEventListener("dragover", e => {
-      if (dragCtx && dragCtx.arr === lineOrder){ e.preventDefault(); box.classList.add("dragover"); }
+      if (dragCtx && dragCtx.kind === "lineOrder"){ e.preventDefault(); box.classList.add("dragover"); }
     });
     box.addEventListener("dragleave", () => box.classList.remove("dragover"));
     box.addEventListener("drop", e => {
       e.preventDefault(); box.classList.remove("dragover");
-      if (!dragCtx || dragCtx.arr !== lineOrder) return;
+      if (!dragCtx || dragCtx.kind !== "lineOrder") return;
       const from = dragCtx.idx, to = lineOrder.indexOf(group.acr);
       dragCtx = null;
       if (from === -1 || to === -1 || from === to) return;
@@ -3164,20 +3165,35 @@ function makeRow(st, idx, arr){
   bottom.appendChild(makeTierCheckboxes(st, () => { syncTextFromLive(); render(); }));
   bottom.appendChild(makeSirCheckbox(st, () => { syncTextFromLive(); render(); }));
 
-  row.addEventListener("dragstart", () => { dragCtx = { arr, idx }; row.classList.add("dragging"); });
+  /* A station can be dragged across group boundaries too — trunk to
+     branch, one branch to another, into a loop or wye arm — not just
+     reordered within its own list. dragCtx only needs to remember which
+     array it came from; drop then either reorders in place (source ===
+     destination, same as before) or splices it out of its old array and
+     into the new one at the drop target's own index. The `kind` tag is
+     what keeps this from ever completing against an unrelated line-order
+     drag (see the "lineOrder" dragCtx above) — reference equality on
+     `.arr` alone can't do that job anymore now that station rows
+     themselves move freely between different arrays. */
+  row.addEventListener("dragstart", () => { dragCtx = { kind:"station", arr, idx }; row.classList.add("dragging"); });
   row.addEventListener("dragend", () => row.classList.remove("dragging"));
   row.addEventListener("dragover", e => {
-    if (dragCtx && dragCtx.arr === arr){ e.preventDefault(); row.classList.add("dragover"); }
+    if (dragCtx && dragCtx.kind === "station"){ e.preventDefault(); row.classList.add("dragover"); }
   });
   row.addEventListener("dragleave", () => row.classList.remove("dragover"));
   row.addEventListener("drop", e => {
     e.preventDefault(); row.classList.remove("dragover");
-    if (!dragCtx || dragCtx.arr !== arr) return;
-    const from = dragCtx.idx, to = idx;
+    if (!dragCtx || dragCtx.kind !== "station") return;
+    const { arr:fromArr, idx:from } = dragCtx;
     dragCtx = null;
-    if (from === to) return;
-    const [moved] = arr.splice(from, 1);
-    arr.splice(to, 0, moved);
+    if (fromArr === arr){
+      if (from === idx) return;
+      const [moved] = arr.splice(from, 1);
+      arr.splice(idx, 0, moved);
+    } else {
+      const [moved] = fromArr.splice(from, 1);
+      arr.splice(idx, 0, moved);
+    }
     syncTextFromLive(); renderEditorRows(); render();
   });
 
