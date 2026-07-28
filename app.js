@@ -915,6 +915,35 @@ function buildDiagram(cfg){
   const trunkCount = nodes.length;
   el("path", { d:trunkPath, stroke:colour, "stroke-width":STYLE.lineWidth }, gLines);
 
+  /* ---- pre-scan: which trunk junctions have BOTH an up- and a down-going
+     attachment (two ordinary branches, one each way, or a single two-armed
+     wye) — a plain branch's own name normally just moves to whichever side
+     is empty (above/DIAG by default, BELOW when something's above it), but
+     that logic breaks down once BOTH sides are taken. Horizontal layout
+     only: "up"/"down" isn't a meaningful pairing on a vertical or loop
+     trunk, where branches instead sit left/right of the trunk itself. */
+  const junctionDirs = new Map();   // trunk index -> { up, down }
+  const markJunctionDir = (idx, isUp) => {
+    const e = junctionDirs.get(idx) || { up:false, down:false };
+    if (isUp) e.up = true; else e.down = true;
+    junctionDirs.set(idx, e);
+  };
+  if (cfg.layout === "horizontal"){
+    branches.forEach(b => {
+      if (!b.stations.length || b.to) return;   // bridge branches keep their own separate BELOW handling above
+      const key = b.from.toUpperCase();
+      let j = nodes.findIndex((n, i) => i < trunkCount &&
+        ((n.code || "").toUpperCase() === key || (n.name || "").toUpperCase() === key));
+      if (j < 0) j = trunkCount - 1;
+      markJunctionDir(j, b.dir === "up");
+    });
+    (wyes || []).forEach(wy => {
+      const idx = wy.at === "start" ? 0 : trunkCount - 1;
+      if (wy.a && wy.a.stations.length) markJunctionDir(idx, true);
+      if (wy.b && wy.b.stations.length) markJunctionDir(idx, false);
+    });
+  }
+
   /* ---- branches: smooth curve (or orthogonal turn) out of the trunk ---- */
   const warnings = [];
   const drawBranchLine = (d, strokeColour, shuttle) => {
@@ -1137,7 +1166,20 @@ function buildDiagram(cfg){
       drawBranchLine(d, bc, shuttle);
 
     } else { /* horizontal */
-      if (b.dir === "up") jn.label = BELOW;   // keep the name clear of the branch line above
+      /* both above AND below are taken (an up branch and a down branch on
+         the very same junction) — neither DIAG nor BELOW is free, so the
+         name has to move off to the side instead: outward (LEFT/RIGHT) if
+         this junction is a trunk terminus, or the top-right corner (DIAG
+         is already exactly that) if it's an intermediate station, since
+         the trunk itself already occupies dead ahead on both sides. */
+      const dirs = junctionDirs.get(j);
+      if (dirs && dirs.up && dirs.down){
+        if (j === 0) jn.label = LEFT;
+        else if (j === trunkCount - 1) jn.label = RIGHT;
+        // else: leave the default DIAG (top-right corner) in place
+      } else if (b.dir === "up"){
+        jn.label = BELOW;   // keep the name clear of the branch line above
+      }
       const sgn = b.dir === "up" ? -1 : 1;
       const growSgn = b.grow === "left" ? -1 : 1;
       const by = jn.y + sgn * gap;
@@ -1295,6 +1337,16 @@ function buildDiagram(cfg){
     }
     const along = (d) => axisHoriz ? { x: jn.x + axisSgn * d, y: jn.y } : { x: jn.x, y: jn.y + axisSgn * d };
     const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
+
+    /* a wye only ever sits at a trunk terminus (never mid-trunk), so once
+       both arms exist there's nowhere left but the side — same LEFT/RIGHT
+       move an ordinary branch pair gets at a terminus junction, above. */
+    if (axisHoriz){
+      const jnIdx = wy.at === "start" ? 0 : trunkCount - 1;
+      const dirs = junctionDirs.get(jnIdx);
+      if (dirs && dirs.up && dirs.down) jn.label = (wy.at === "start") ? LEFT : RIGHT;
+      else if (dirs && dirs.up) jn.label = BELOW;
+    }
 
     /* Half the final gap between the two arms once parallel, so the two
        arms sit a total of one branch spacing apart (not two) — the same
