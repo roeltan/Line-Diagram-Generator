@@ -42,7 +42,8 @@ const LINE_INFO = {
   BT:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" }, BE:{ name:"Bukit Timah Railway", colour:"#ed5e0c", acr:"BTR", tier:"proposed" },
   ER:{ name:"Eastern Region Line", colour:"#cc2680", acr:"ERL", tier:"proposed" },
   NR:{ name:"Northern Rail Link", colour:"#900000", acr:"NRL", tier:"proposed" },
-  NC:{ name:"North Coast Line", colour:"#4d91ba", acr:"NCL", tier:"proposed" }
+  NC:{ name:"North Coast Line", colour:"#4d91ba", acr:"NCL", tier:"proposed" },
+  HSR:{ name:"High-Speed Rail", colour:"#b4a68b", acr:"HSR", tier:"proposed" }
 };
 /* A frozen copy of LINE_INFO exactly as shipped, captured before anything
    can mutate it — the saved-state format below persists only what a user
