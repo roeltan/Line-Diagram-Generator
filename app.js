@@ -964,9 +964,9 @@ function buildDiagram(cfg){
   const wyeArmSpans = [];   // { sgn: -1 (up) | 1 (down), xMin, xMax }
   if (cfg.layout === "horizontal"){
     const wyeHalfGap = branchGap / 2;
-    const wyeCornerR = Math.max(30, Math.min(sp * 0.9, 90));
+    const wyeCornerR = Math.max(20, Math.min(sp * 0.6, 60));
     const wyeDiagLen = wyeHalfGap * Math.SQRT2;
-    const wyePostTurnBuf = Math.max(wyeDiagLen, sp * 0.5, wyeCornerR * 0.6);
+    const wyePostTurnBuf = Math.max(wyeDiagLen, sp * 0.5, wyeCornerR * 0.6) * 0.5;
     (wyes || []).forEach(wy => {
       const jn = wy.at === "start" ? nodes[0] : nodes[trunkCount - 1];
       if (!jn) return;
@@ -1420,9 +1420,9 @@ function buildDiagram(cfg){
        finishes before the run starts, instead of the two silently
        overlapping. */
     const halfGap = branchGap / 2;
-    const WYE_CORNER_R = Math.max(30, Math.min(sp * 0.9, 90));
+    const WYE_CORNER_R = Math.max(20, Math.min(sp * 0.6, 60));
     const diagLen = halfGap * Math.SQRT2;
-    const postTurnBuf = Math.max(diagLen, sp * 0.5, WYE_CORNER_R * 0.6);
+    const postTurnBuf = Math.max(diagLen, sp * 0.5, WYE_CORNER_R * 0.6) * 0.5;
 
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
