@@ -62,6 +62,44 @@ function tierOfCode(code){
   return (info && info.tier) || "current";
 }
 
+/* Parses one interchange-code token (already split on comma/semicolon):
+   strips an optional trailing (tier)/(until:tier) tag — parens rather than
+   the usual {tag} braces, same reason BUS(future)/BUS(proposed) already
+   uses parens instead of braces: a brace group at the end of an ics entry
+   would collide with the whole *station* line's own trailing {tag}
+   (stripTier runs on the raw line first, greedily, before the ics list is
+   even split apart). Most codes don't need this at all (their prefix's own
+   LINE_INFO tier already says when they start showing), but it lets a
+   single code be pinned to a tier window that differs from its prefix's
+   default — e.g. a station whose interchange code gets renumbered partway
+   through the roadmap (JS8(until:future) replaced by JW5(proposed) at the
+   same station), the same way two whole station entries already handle a
+   renumbered code. */
+function parseIcCode(raw){
+  let c = raw;
+  let tier = null, until = null;
+  const tagM = /\(([a-z0-9,: ]+)\)\s*$/i.exec(c);
+  if (tagM){
+    c = c.slice(0, tagM.index).trim();
+    tagM[1].split(",").forEach(tok => {
+      tok = tok.trim().toLowerCase();
+      if (tok === "future" || tok === "proposed") tier = tok;
+      else { const m = /^until:(future|proposed)$/.exec(tok); if (m) until = m[1]; }
+    });
+  }
+  const sir = /!$/.test(c);
+  if (sir) c = c.slice(0, -1);
+  const osi = /\*$/.test(c);
+  const nearby = /\^$/.test(c);
+  const t = (osi || nearby) ? c.slice(0, -1) : c;
+  return { t, osi, nearby, sir, tier: tier || tierOfCode(t), until };
+}
+function icCodeVisible(parsed, tierRank){
+  if (TIER_RANK[parsed.tier] > tierRank) return false;
+  if (parsed.until && tierRank > TIER_RANK[parsed.until]) return false;
+  return true;
+}
+
 /* A bus interchange's own roadmap tier — most are already there today
    ("BUS"), but some (e.g. a station getting a bus interchange added later)
    aren't built yet: "BUS(future)"/"BUS(proposed)". Parens rather than the
@@ -1259,14 +1297,9 @@ function buildDiagram(cfg){
     });
     if (cfg.showIc) n.ics.forEach(raw => {
       if (busTier(raw) !== null) return;      // a nearby bus interchange, drawn separately as an icon
-      let c = raw;
-      const icSir = /!$/.test(c);             // trailing ! marks that interchange itself as a SIR express stop
-      if (icSir) c = c.slice(0, -1);
-      const osi = /\*$/.test(c);              // trailing * marks an out-of-station interchange
-      const nearby = /\^$/.test(c);           // trailing ^ marks a nearby (separate, unlinked) station
-      const t = (osi || nearby) ? c.slice(0, -1) : c;
-      if (TIER_RANK[tierOfCode(t)] > cfg.tierRank) return;   // that other line doesn't exist yet at this roadmap tier
-      codes.push({ t, c:colourForCode(t, n.colour), osi, nearby, sir:icSir });
+      const p = parseIcCode(raw);
+      if (!icCodeVisible(p, cfg.tierRank)) return;   // that other line (or this code's own tier window) doesn't cover this roadmap tier
+      codes.push({ t:p.t, c:colourForCode(p.t, n.colour), osi:p.osi, nearby:p.nearby, sir:p.sir });
     });
 
     const dir = L.codeDir;
@@ -1521,11 +1554,12 @@ function buildDiagram(cfg){
   if (cfg.showIc) nodes.forEach(n => n.ics.forEach(code => {
     if (busTier(code) !== null) return;                        // a nearby bus interchange, not a rail line
     if (n.shuttleIcs && n.shuttleIcs.includes(code)) return;   // shuttle spur of this same line, not a separate interchange
-    if (TIER_RANK[tierOfCode(code)] > cfg.tierRank) return;    // that other line doesn't exist yet at this roadmap tier
-    const m = /^([A-Za-z]+)/.exec(code || "");
-    const prefix = m ? m[1].toUpperCase() : (code || "").toUpperCase();
+    const p = parseIcCode(code);
+    if (!icCodeVisible(p, cfg.tierRank)) return;   // that other line (or this code's own tier window) doesn't cover this roadmap tier
+    const m = /^([A-Za-z]+)/.exec(p.t || "");
+    const prefix = m ? m[1].toUpperCase() : (p.t || "").toUpperCase();
     const info = LINE_INFO[prefix];
-    pushLegend((info && info.name) || code || "Line", (info && info.colour) || colour, (info && info.acr) || prefix);
+    pushLegend((info && info.name) || p.t || "Line", (info && info.colour) || colour, (info && info.acr) || prefix);
   }));
 
   /* the diagram's own line (if pushed) always leads the legend; every other
