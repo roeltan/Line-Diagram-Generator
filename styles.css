@@ -211,6 +211,7 @@
          border-radius:7px;padding:8px}
   .stRow.dragging{opacity:.4}
   .stRow.dragover{border-color:var(--accent)}
+  .stRow.flash{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);transition:box-shadow .15s ease-out}
   .stRowTop{display:flex;align-items:center;gap:5px}
   .stRowBottom{display:flex;align-items:center;gap:5px}
   .dragHandle{flex:none;cursor:grab;color:var(--muted);font-size:13px;padding:0 2px;user-select:none;line-height:1}

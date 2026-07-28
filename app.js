@@ -1447,7 +1447,16 @@ function buildDiagram(cfg){
   });
 
   /* ---- labels + markers: the station-code caplet doubles as the marker ---- */
+  const gLabelsRoot = gLabels;
   nodes.forEach(n => {
+    /* Shadows the outer gLabels for just this iteration — every element
+       below (caplets, name, SIR ring, bus icon) ends up nested in this
+       one per-station group instead, tagged with the station's own uid
+       (set the first time its sidebar row was built, in editor mode
+       only) so a click anywhere on the station bubbles up to a single
+       delegated listener that can scroll the matching row into view. */
+    const gLabels = el("g", n.__uid !== undefined
+      ? { "data-station-uid": n.__uid, style:"cursor:pointer" } : null, gLabelsRoot);
     const L = n.label;
     const codes = [];
     if (cfg.showCodes && n.code) codes.push({ t:n.code, c:n.colour });
@@ -2831,6 +2840,12 @@ MB2  Branch Terminus`
 let mode = "editor";                 // 'editor' | 'text'
 let live = { trunk:[], branches:[], loops:[], wyes:[] };
 let dragCtx = null;
+/* Lazily assigned in makeRow so a station's diagram markup (rendered from
+   the very same live object, in editor mode) can carry the same id back
+   out — that's what lets clicking a station in the diagram find its own
+   row in the sidebar. Text mode re-parses into fresh station objects with
+   no uid at all, so there's simply nothing to scroll to there. */
+let stationUidCounter = 0;
 
 function esc(s){
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -3124,6 +3139,8 @@ function makeRow(st, idx, arr){
   row.className = "stRow";
   row.draggable = true;
   row.dataset.idx = idx;
+  if (st.__uid === undefined) st.__uid = ++stationUidCounter;
+  row.dataset.uid = st.__uid;
 
   const top = document.createElement("div");
   top.className = "stRowTop";
@@ -4010,6 +4027,22 @@ $("main").addEventListener("wheel", e => {
   e.preventDefault();
   setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1/1.1));
 }, { passive:false });
+
+/* Clicking a station in the diagram scrolls its own row into view in the
+   sidebar — delegated on #stage rather than attached per-station inside
+   buildDiagram, since the SVG gets torn down and rebuilt on every render.
+   Only ever finds a match in editor mode: text mode re-parses the spec
+   into fresh station objects with no uid to match against, and there's
+   no per-station row to scroll to there anyway. */
+$("stage").addEventListener("click", e => {
+  const hit = e.target.closest("[data-station-uid]");
+  if (!hit) return;
+  const row = document.querySelector(`.stRow[data-uid="${hit.dataset.stationUid}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior:"smooth", block:"center" });
+  row.classList.add("flash");
+  setTimeout(() => row.classList.remove("flash"), 900);
+});
 
 /* --------------------------------------------------------------- export menu */
 $("exportMenuBtn").onclick = e => {
