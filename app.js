@@ -35,6 +35,7 @@ const LINE_INFO = {
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
   RTS:{ name:"RTS Link", colour:"#718573", acr:"RTS", tier:"future" },
+  FV:{ name:"Fernvale LRT", colour:"#718573", acr:"FV", tier:"future" },
   HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL", tier:"proposed" },
   WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR", tier:"proposed" },
   SL:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" }, SP:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" },
@@ -2113,7 +2114,7 @@ NE14 Hougang            > CR8, BUS
 NE15 Buangkok           > ER11, BUS
 NE16 Sengkang           > STC, BUS
 NE17 Punggol            > CP4, NC5!, PTC, BUS
-NE18 Punggol Coast      > WP24, BUS`
+NE18 Punggol Coast      > WP24, FV1, BUS`
   },
   dt:{
     name:"Downtown Line", code:"DTL", colour:"#005ec4", layout:"horizontal",
