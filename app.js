@@ -954,6 +954,33 @@ function buildDiagram(cfg){
     if (n){ n.branchUp = dirs.up; n.branchDown = dirs.down; }
   });
 
+  /* ---- pre-scan: reach of each wye arm along the trunk's own axis, so an
+     ordinary branch heading the same direction (up/down) can tell whether
+     it's about to run alongside — or straight through — that arm's own
+     row. Same halfGap/WYE_CORNER_R/postTurnBuf formulas the wye's own
+     rendering below uses (both only depend on sp/branchGap, which are
+     already known here), just to get each arm's x-span without having to
+     wait for the wye block itself to run. */
+  const wyeArmSpans = [];   // { sgn: -1 (up) | 1 (down), xMin, xMax }
+  if (cfg.layout === "horizontal"){
+    const wyeHalfGap = branchGap / 2;
+    const wyeCornerR = Math.max(30, Math.min(sp * 0.9, 90));
+    const wyeDiagLen = wyeHalfGap * Math.SQRT2;
+    const wyePostTurnBuf = Math.max(wyeDiagLen, sp * 0.5, wyeCornerR * 0.6);
+    (wyes || []).forEach(wy => {
+      const jn = wy.at === "start" ? nodes[0] : nodes[trunkCount - 1];
+      if (!jn) return;
+      const axisSgn = wy.at === "start" ? -1 : 1;
+      [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
+        const arm = wy[armKey];
+        if (!arm || !arm.stations.length) return;
+        const nearX = jn.x + axisSgn * wyeHalfGap;
+        const farX  = jn.x + axisSgn * (wyeHalfGap + wyePostTurnBuf + (arm.stations.length - 1) * sp);
+        wyeArmSpans.push({ sgn: armSgn, xMin: Math.min(nearX, farX), xMax: Math.max(nearX, farX) });
+      });
+    });
+  }
+
   /* ---- branches: smooth curve (or orthogonal turn) out of the trunk ---- */
   const warnings = [];
   const drawBranchLine = (d, strokeColour, shuttle) => {
@@ -1196,16 +1223,24 @@ function buildDiagram(cfg){
       }
       const sgn = b.dir === "up" ? -1 : 1;
       const growSgn = b.grow === "left" ? -1 : 1;
-      const by = jn.y + sgn * gap;
       /* aligned station-for-station with the trunk stations past the
          junction (both flanking gaps got widened to 1.5x above) */
       const x1 = jn.x + growSgn * 1.5 * sp;
+      const lastX = x1 + growSgn * (b.stations.length-1)*sp;
+      /* a long branch heading the same direction (up/down) as a trunk-end
+         wye's own arm can end up running right alongside — or through —
+         that arm's row, once both reach far enough to share the same
+         stretch of x. Pushing this branch's own row an extra half branch-
+         spacing further out keeps the two readable as separate rows
+         instead of overlapping. */
+      const rowXMin = Math.min(x1, lastX), rowXMax = Math.max(x1, lastX);
+      const clashesWithWye = wyeArmSpans.some(w => w.sgn === sgn && rowXMin <= w.xMax && rowXMax >= w.xMin);
+      const by = jn.y + sgn * (gap + (clashesWithWye ? branchGap * 0.5 : 0));
       const dist = Math.abs(x1 - jn.x);
       b.stations.forEach((st, i) => {
         nodes.push({ ...st, x:x1 + growSgn * i * sp, y:by, colour:bc, label:DIAG,
                      kind: i === b.stations.length-1 ? "term" : "", branch:b });
       });
-      const lastX = x1 + growSgn * (b.stations.length-1)*sp;
       const d = b.curve === "orthogonal"
         ? roundedPath([[jn.x, jn.y], [jn.x, by], [lastX, by]], 56)
         : (() => {
