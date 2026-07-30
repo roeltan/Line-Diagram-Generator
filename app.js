@@ -2162,7 +2162,7 @@ EW34 Tuas Frontier       > CR26 {proposed}
 EW33 Tuas Link
 EW32 Tuas West Road
 EW31 Tuas Crescent
-EW30 Gul Circle         > ES2, CR24
+EW30 Gul Circle         > CR24
 EW29 Joo Koon             > BUS
 EW28 Pioneer
 EW27 Boon Lay              > JS8(until:future), JW5(proposed), BUS
