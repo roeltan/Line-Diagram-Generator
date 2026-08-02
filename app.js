@@ -35,7 +35,7 @@ const LINE_INFO = {
   STC:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SW:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" }, SE:{ name:"Sengkang LRT", colour:"#718573", acr:"STC" },
   PTC:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PW:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" }, PE:{ name:"Punggol LRT", colour:"#718573", acr:"PTC" },
   RTS:{ name:"RTS Link", colour:"#87CEFA", acr:"RTS", tier:"future" },
-  FV:{ name:"Fernvale LRT", colour:"#718573", acr:"FV", tier:"proposed" },
+  FV:{ name:"Fernvale LRT", colour:"#386a8b", acr:"FV", tier:"proposed" },
   HL:{ name:"Holland-Long Island Line", colour:"#e8467c", acr:"HLL", tier:"proposed" },
   WP:{ name:"West Coast-Punggol Railway", colour:"#c7a173", acr:"WPR", tier:"proposed" },
   SL:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" }, SP:{ name:"Seletar Line", colour:"#eacd5e", acr:"SLL", tier:"proposed" },
@@ -2285,7 +2285,7 @@ const PRESET_GROUPS = [
     { key:"erl", acr:"ERL", label:"Eastern Region Line", colour:"#cc2680", tier:"proposed" },
     { key:"nrl", acr:"NRL", label:"Northern Rail Link", colour:"#900000", tier:"proposed" },
     { key:"ncl", acr:"NCL", label:"North Coast Line", colour:"#4d91ba", tier:"proposed" },
-    { key:"fvlrt", acr:"FV", label:"Fernvale LRT", colour:"#718573", tier:"proposed" },
+    { key:"fvlrt", acr:"FV", label:"Fernvale LRT", colour:"#386a8b", tier:"proposed" },
   ]},
   { name:"Other", items:[
     { key:"stl", acr:"STL", label:"Seletar-Tengah Line", colour:"#e8467c", tier:"proposed" },
@@ -2666,7 +2666,7 @@ PW7  Soo Teck           > FV5`
     /* Fernvale LRT (RMP50 Doc. 50C) — a straight line, not a loop like the
        other three LRTs: RMP50 lists it as one flat FV1-FV12 sequence with
        no East/West split at all. */
-    name:"Fernvale LRT", code:"FV", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
+    name:"Fernvale LRT", code:"FV", colour:"#386a8b", layout:"horizontal", spacing:75, branchSpacing:60,
     spec:`FV1  Punggol Coast      > NE18, WP24 {proposed}
 FV2  Samudera           > PW4 {proposed}
 FV3  Nibong             > PW5 {proposed}
