@@ -1502,7 +1502,7 @@ function buildDiagram(cfg){
        distance in from forkOrigin along the S-curve's own parameter,
        noticeably smaller than halfGap (the far corner where the curve
        straightens into the row). */
-    const hubR = Math.max(WYE_CORNER_R * 0.75, sp * 0.28);
+    const hubR = Math.max(WYE_CORNER_R, sp * 0.5);
     /* The smooth curve gets to run further out than the sharp diagonal
        does (past halfGap, not stopping at it) — postTurnBuf shrinks by
        that same extra amount so the first station doesn't actually move,
@@ -1623,11 +1623,15 @@ function buildDiagram(cfg){
       /* A caplet's own painted pixels are a fairly small, precisely-placed
          target — the gaps around it (say, between the caplet and its own
          diagonal name label) aren't painted at all, so neither a browser's
-         hit-testing nor CSS :hover ever fires there. This transparent (but
-         still *painted*, unlike fill:none) circle centred on the station's
-         own point gives hover/click a generous, reliable target regardless
-         of which label style is in play. */
-      el("circle", { cx:F2(n.x), cy:F2(n.y), r:18, fill:"transparent" }, gLabels);
+         hit-testing nor CSS :hover ever fires there. This circle centred on
+         the station's own point gives hover/click a generous, reliable
+         target regardless of which label style is in play. fill:none (not
+         "transparent" — a CSS Color Module keyword, not valid SVG 1.1, so
+         some standalone SVG viewers/rasterizers fall back to painting it
+         solid black once the file is exported and opened outside this
+         app's own DOM) plus pointer-events:all keeps it invisible but still
+         hit-testable. */
+      el("circle", { cx:F2(n.x), cy:F2(n.y), r:18, fill:"none", "pointer-events":"all" }, gLabels);
     }
     const L = n.label;
     const codes = [];
