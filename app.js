@@ -1397,12 +1397,22 @@ function buildDiagram(cfg){
     const along = (d) => axisHoriz ? { x: jn.x + axisSgn * d, y: jn.y } : { x: jn.x, y: jn.y + axisSgn * d };
     const across = (pt, d) => axisHoriz ? { x: pt.x, y: pt.y + d } : { x: pt.x + d, y: pt.y };
 
+    /* Fork point only actually changes anything once any-to-any is also
+       on — see the fuller explanation below, right where it's used to
+       decide the stub. Needed here too: once there's a real stub, the
+       terminal station itself sits apart from the fork/triangle shape
+       (out along the stub, not touching it), so it no longer needs to
+       dodge those curves — its name can go back to a normal terminus
+       label instead of being forced to the side. */
+    const showStub = wy.anyToAny && wy.forkBeyond;
+
     /* a wye only ever sits at a trunk terminus (never mid-trunk), so once
        both arms exist there's nowhere left but the side — same LOOP_LEFT/
        LOOP_RIGHT move an ordinary branch pair gets at a terminus junction,
        above (codes still grow straight down, unlike a genuine vertical-
-       layout branch station's sideways-growing LEFT/RIGHT). */
-    if (axisHoriz){
+       layout branch station's sideways-growing LEFT/RIGHT). Skipped once
+       there's a real stub (see above). */
+    if (axisHoriz && !showStub){
       const jnIdx = wy.at === "start" ? 0 : trunkCount - 1;
       const dirs = junctionDirs.get(jnIdx);
       if (dirs && dirs.up && dirs.down) jn.label = (wy.at === "start") ? LOOP_LEFT : LOOP_RIGHT;
@@ -1442,8 +1452,7 @@ function buildDiagram(cfg){
        past it) only actually changes anything when any-to-any is also on
        — for trunk-only, the service pattern is identical either way, so
        there's nothing for a stub to usefully set apart; it's only drawn
-       once BOTH are true. */
-    const showStub = wy.anyToAny && wy.forkBeyond;
+       once BOTH are true (showStub, computed above). */
     const forkOrigin = showStub ? along(sp * 0.8) : jn;
     if (showStub){
       el("path", { d:`M ${F2(jn.x)} ${F2(jn.y)} L ${F2(forkOrigin.x)} ${F2(forkOrigin.y)}`,
@@ -1474,7 +1483,11 @@ function buildDiagram(cfg){
     });
 
     if (showStub && corners.a && corners.b){
-      const bulge = halfGap;
+      /* Tight, on purpose: this connects the same two corner points the
+         trunk-to-arm curves already round through, so it uses that same
+         small radius rather than reaching out as far as halfGap (which
+         reads as a big dome, not a tight triangular junction). */
+      const bulge = WYE_CORNER_R;
       const ca = corners.a, cb = corners.b;
       const c1 = axisHoriz ? { x: ca.x + axisSgn * bulge, y: ca.y } : { x: ca.x, y: ca.y + axisSgn * bulge };
       const c2 = axisHoriz ? { x: cb.x + axisSgn * bulge, y: cb.y } : { x: cb.x, y: cb.y + axisSgn * bulge };
