@@ -4056,7 +4056,24 @@ $("fitWidth").onclick = fitWidth;
 $("fitHeight").onclick = fitHeight;
 $("main").addEventListener("wheel", e => {
   e.preventDefault();
+  if (!current){ setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)); return; }
+  /* Zoom toward the cursor, not the top-left corner: capture where the
+     cursor sits as a *fraction* of the diagram's current on-screen box
+     before resizing it, then slide pan by exactly how much the box grew/
+     shrank on each side of that fraction, so the point under the cursor
+     stays under the cursor. Works the same whether the cursor is over
+     the diagram or off in the padded/empty area around it — it just
+     zooms toward whatever point on the diagram's own plane the cursor
+     projects onto, same as most map/canvas tools do. */
+  const rect = current.svg.getBoundingClientRect();
+  const fracX = rect.width  ? (e.clientX - rect.left) / rect.width  : 0.5;
+  const fracY = rect.height ? (e.clientY - rect.top)  / rect.height : 0.5;
+  const oldZoom = zoom;
   setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1/1.1));
+  const ratio = zoom / oldZoom;
+  panX -= fracX * rect.width  * (ratio - 1);
+  panY -= fracY * rect.height * (ratio - 1);
+  applyPan();
 }, { passive:false });
 
 /* Clicking a station in the diagram scrolls its own row into view in the
