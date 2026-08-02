@@ -1476,28 +1476,38 @@ function buildDiagram(cfg){
        that would keep going straight right where the arms' own curves
        have already started bending away, poking out past them. */
     const alongFork = (d) => axisHoriz ? { x: forkOrigin.x + axisSgn * d, y: forkOrigin.y } : { x: forkOrigin.x, y: forkOrigin.y + axisSgn * d };
-    /* A point on the arm's own 45° diagonal ray, `dist` out from forkOrigin
-       in both the along- and across-axis (equal travel, true 45°) — as
-       opposed to rowPoint below, which is a point on the *flat row* past
-       the diagonal (fixed across-offset regardless of how far along). */
-    const diagPoint = (armSgn, dist) => across(alongFork(dist), armSgn * dist);
-    /* All three curves (trunk-to-A, trunk-to-B, A-to-B) meet right where
-       the trunk actually splits — hubR out from forkOrigin, noticeably
-       smaller than halfGap (the far corner where the diagonal straightens
-       into the row) but big enough that the curvature leaving forkOrigin
-       still reads clearly, not as a near-sharp kink. */
+    /* Point on a cubic bezier at parameter t (0-1) — used to anchor the
+       any-to-any connecting curve to a point that's actually *on* the arm's
+       own new S-curve (see smoothFork below), rather than on the old 45°
+       diagonal ray, which the S-curve doesn't follow at all near the fork. */
+    const bezierPoint = (p0, p1, p2, p3, t) => {
+      const mt = 1 - t;
+      return {
+        x: mt*mt*mt*p0.x + 3*mt*mt*t*p1.x + 3*mt*t*t*p2.x + t*t*t*p3.x,
+        y: mt*mt*mt*p0.y + 3*mt*mt*t*p1.y + 3*mt*t*t*p2.y + t*t*t*p3.y,
+      };
+    };
+    /* The any-to-any connecting curve anchors close to the fork — hubR
+       distance in from forkOrigin along the S-curve's own parameter,
+       noticeably smaller than halfGap (the far corner where the curve
+       straightens into the row). */
     const hubR = Math.max(WYE_CORNER_R * 0.5, sp * 0.18);
-    /* Trunk-only has no real stub to lean on (forkOrigin === jn), so the
-       "coming from" reference is a synthetic point back along the trunk's
-       own axis instead — reaching noticeably further out than hubR (which
-       is sized for the any-to-any hub points, tucked in close to the
-       triangle) and rounded with a correspondingly bigger radius, so the
-       bend actually clears the station's own caplet instead of hiding
-       underneath it. Any-to-any-past-station already has a real stub of
-       its own to lean on (jn), long enough that this doesn't apply there. */
-    const trunkOnlyReach = Math.max(WYE_CORNER_R * 1.4, sp * 0.4);
-    const forkRadius = (!wy.anyToAny) ? trunkOnlyReach : WYE_CORNER_R;
-    const vertexBack = !smoothFork ? null : (showStub ? jn : alongFork(-trunkOnlyReach));
+    /* The smooth curve gets to run further out than the sharp diagonal
+       does (past halfGap, not stopping at it) — postTurnBuf shrinks by
+       that same extra amount so the first station doesn't actually move,
+       just more of the trip there reads as curve and less as a plain
+       straight run. Only the smooth cases rebalance this way; the sharp
+       diagonal keeps its original halfGap/postTurnBuf split untouched. */
+    const extraCurveRoom = smoothFork ? Math.min(postTurnBuf * 0.6, sp * 0.4) : 0;
+    const rowStartDist = halfGap + extraCurveRoom;
+    const rowPostBuf = Math.max(0, postTurnBuf - extraCurveRoom);
+    /* Trunk-only has no real stub, so a short straight run leaving
+       forkOrigin (still dead in line with the trunk) before the curve
+       itself starts gives the bend some breathing room away from the
+       station's own caplet — any-to-any-past-station already gets this
+       for free from its real stub. */
+    const curveInset = (!wy.anyToAny && smoothFork) ? Math.max(WYE_CORNER_R * 0.5, sp * 0.15) : 0;
+    const curveStart = curveInset ? alongFork(curveInset) : forkOrigin;
 
     const corners = {};
     const hubPts = {};
@@ -1506,15 +1516,35 @@ function buildDiagram(cfg){
       if (!arm || !arm.stations.length) return;
       const bc = arm.colour || colour;
       const rowPoint = (alongDist) => across(alongFork(alongDist), armSgn * halfGap);
-      const corner = rowPoint(halfGap);
+      const corner = rowPoint(smoothFork ? rowStartDist : halfGap);
       corners[armKey] = corner;
-      if (showStub) hubPts[armKey] = diagPoint(armSgn, hubR);
-      const stationPts = arm.stations.map((st, i) => rowPoint(halfGap + postTurnBuf + i * sp));
+      const stationPts = arm.stations.map((st, i) => rowPoint((smoothFork ? rowStartDist : halfGap) + (smoothFork ? rowPostBuf : postTurnBuf) + i * sp));
       bb.add(corner.x, corner.y);
-      const pathPts = smoothFork
-        ? [[vertexBack.x, vertexBack.y], [forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])]
-        : [[forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])];
-      const d = roundedPath(pathPts, forkRadius);
+
+      let d;
+      if (smoothFork){
+        /* A single cubic bezier from curveStart to corner — tangent to
+           the trunk's own straight-ahead direction at the start (control
+           point 1 sits on forkOrigin's own across-level) and tangent to
+           the row's own direction at the end (control point 2 sits on
+           corner's own across-level), the same tangent-matched S-curve
+           technique an ordinary smooth branch already uses elsewhere in
+           this file. Only ever moves forward from forkOrigin (plus the
+           trunk-only inset, if any) — never backward into the trunk,
+           unlike an earlier approach that rounded a synthetic point
+           behind the junction, which both left a disconnected-looking
+           stub poking out and made the visible bend start before the
+           station instead of after it. */
+        const mid = curveInset + (rowStartDist - curveInset) * 0.5;
+        const c1 = alongFork(mid);
+        const c2 = rowPoint(mid);
+        if (showStub) hubPts[armKey] = bezierPoint(curveStart, c1, c2, corner, Math.min(1, hubR / (rowStartDist - curveInset)));
+        d = (curveInset ? `M ${F2(forkOrigin.x)} ${F2(forkOrigin.y)} L ${F2(curveStart.x)} ${F2(curveStart.y)} ` : `M ${F2(curveStart.x)} ${F2(curveStart.y)} `) +
+            `C ${F2(c1.x)} ${F2(c1.y)}, ${F2(c2.x)} ${F2(c2.y)}, ${F2(corner.x)} ${F2(corner.y)}` +
+            stationPts.map(p => ` L ${F2(p.x)} ${F2(p.y)}`).join("");
+      } else {
+        d = roundedPath([[forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], WYE_CORNER_R);
+      }
       drawBranchLine(d, bc, false);
 
       const rowLabel = axisHoriz ? DIAG : (armSgn < 0 ? LEFT : RIGHT);
