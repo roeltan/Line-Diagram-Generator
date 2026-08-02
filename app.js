@@ -1454,10 +1454,13 @@ function buildDiagram(cfg){
        there's nothing for a stub to usefully set apart; it's only drawn
        once BOTH are true (showStub, computed above). */
     const forkOrigin = showStub ? along(sp * 0.8) : jn;
-    if (showStub){
-      el("path", { d:`M ${F2(jn.x)} ${F2(jn.y)} L ${F2(forkOrigin.x)} ${F2(forkOrigin.y)}`,
-                   stroke:colour, "stroke-width":STYLE.lineWidth }, gLines);
-    }
+    /* No separate stub path drawn here — each arm's own rounded path below
+       already starts at jn and only bends away once it nears forkOrigin
+       (see vertexBack), so the straight jn-to-forkOrigin stretch is
+       already fully covered (twice over, once per arm, harmlessly
+       overlapping). A separate full-length straight stub drawn on top of
+       that would keep going straight right where the arms' own curves
+       have already started bending away, poking out past them. */
     const alongFork = (d) => axisHoriz ? { x: forkOrigin.x + axisSgn * d, y: forkOrigin.y } : { x: forkOrigin.x, y: forkOrigin.y + axisSgn * d };
     /* A point on the arm's own 45° diagonal ray, `dist` out from forkOrigin
        in both the along- and across-axis (equal travel, true 45°) — as
@@ -1469,8 +1472,13 @@ function buildDiagram(cfg){
        smaller than halfGap (the far corner where the diagonal straightens
        into the row) but big enough that the curvature leaving forkOrigin
        still reads clearly, not as a near-sharp kink. */
-    const hubR = Math.max(WYE_CORNER_R, sp * 0.4);
-    const vertexBack = showStub ? along(-hubR) : null;   // gives forkOrigin itself a real bend to round, instead of a raw sharp endpoint
+    const hubR = Math.max(WYE_CORNER_R * 0.5, sp * 0.18);
+    /* jn itself (not a synthetic point further back) is the right "coming
+       from" reference for rounding forkOrigin — it's already exactly
+       where the stub's own straight line starts, so the bend blends
+       smoothly into the real approach direction instead of introducing
+       a second, disconnected kink of its own. */
+    const vertexBack = showStub ? jn : null;
 
     const corners = {};
     const hubPts = {};
@@ -1500,17 +1508,16 @@ function buildDiagram(cfg){
     });
 
     if (showStub && hubPts.a && hubPts.b){
-      /* Connects the two arms right at the hub, not out at the far row
-         corners. A single control point centred on the trunk's own axis
-         (not one independently pushed out from each hub point) keeps this
-         a clean, symmetric arc — two independently-bulged control points
-         each drift toward their own arm's own heading and end up crossing
-         back over that same arm's trunk-to-arm curve, reading as a
-         pretzel instead of a triangle. */
-      const bulge = hubR * 0.7;
+      /* Connects the two arms right at the hub — using forkOrigin itself
+         as the quadratic's one control point, not an arbitrary offset
+         point. Both arms' own 45° diagonals pass through forkOrigin, so
+         a quadratic bezier control point placed exactly there makes the
+         curve's tangent at each hub point fall exactly along that arm's
+         own diagonal (a quadratic's tangent at an endpoint always points
+         straight at the control point) — the curve leaves each arm's own
+         line seamlessly instead of meeting it at a visible kink. */
       const ha = hubPts.a, hb = hubPts.b;
-      const mid = alongFork(hubR + bulge);
-      const d = `M ${F2(ha.x)} ${F2(ha.y)} Q ${F2(mid.x)} ${F2(mid.y)}, ${F2(hb.x)} ${F2(hb.y)}`;
+      const d = `M ${F2(ha.x)} ${F2(ha.y)} Q ${F2(forkOrigin.x)} ${F2(forkOrigin.y)}, ${F2(hb.x)} ${F2(hb.y)}`;
       drawBranchLine(d, colour, false);
     }
   });
