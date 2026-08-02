@@ -1289,15 +1289,11 @@ function buildDiagram(cfg){
     if (!jn) return;
     const bc = lp.colour || colour;
 
-    /* The loop's own "thickness" starts from the same baseline as the
-       whole-diagram Loop shape (max(sp,100)), so it's consistent across
-       orientations by default — then scales with however far the branch
-       spacing slider sits from ITS OWN default for this orientation, so
-       branch spacing still visibly resizes it without reintroducing the
-       disproportion between horizontal (default 120) and vertical
-       (default 240) that using branchGap directly caused. */
-    const branchGapRatio = branchGap / (BRANCH_SPACING_DEFAULT[cfg.layout] || 120);
-    const r = Math.max(sp, 100) * branchGapRatio;
+    /* One branch-height spacing between the loop's two rows — half a branch
+       height above the trunk for row A, half below for row B — the same
+       halfGap convention a trunk-end wye already uses for its own two arms,
+       so both trunk-end features read consistently. */
+    const r = branchGap / 2;
     const buf = Math.max(20, r * 0.35);    // a short straight run past jn before the fork starts curving
     const rowBuf = buf;                    // the same, mirrored — a short straight run after each row's own curve before its first station
     const curveRun = sp * 2;               // how far (along the axis) the smooth S-curve fork takes to reach full perpendicular offset — two station pitches, so it has room to breathe
@@ -3262,6 +3258,11 @@ function syncVisibility(){
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
   $("trunkEndsContainer").style.display = l === "loop" ? "none" : "";
   $("trunkEndsSect").style.display = l === "loop" ? "none" : "";
+  /* Vertical trunk orientation isn't part of the v1 release (it's been
+     neglected relative to horizontal) — hidden for a straight trunk, but
+     still offered for a closed loop's own major axis, a separate, equally-
+     maintained setting under the same two buttons. */
+  $("orientationVerticalBtn").style.display = l === "loop" ? "" : "none";
   syncSpacingSlider();
   syncBranchSpacingSlider();
 }
