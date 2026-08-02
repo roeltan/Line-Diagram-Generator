@@ -177,22 +177,24 @@ const FONT = '"LTA Identity", -apple-system, BlinkMacSystemFont, "Segoe UI", Int
 /* Rough text width; good enough for bounding boxes and label offsets. */
 const measure = (t, size) => (t ? t.length * size * 0.565 : 0);
 
-/* Splits a long name into two roughly-balanced lines at a word boundary
-   (used for loop-layout station names, which read horizontally centred and
-   would otherwise run into neighbouring stations). Returns [name] unchanged
-   if it's short enough or has no word boundary to split at. */
+/* Greedily word-wraps a long name onto as many lines as it needs to keep
+   each one within `threshold` characters (used for loop-layout station
+   names, which read horizontally centred and would otherwise run into
+   neighbouring stations). Returns [name] unchanged if it's short enough or
+   has no word boundary to wrap at. */
 function wrapName(name, threshold){
   if (!name || name.length <= threshold) return [name];
   const words = name.split(" ");
   if (words.length < 2) return [name];
-  let best = 1, bestDiff = Infinity;
+  const lines = [];
+  let cur = words[0];
   for (let i = 1; i < words.length; i++){
-    const l1 = words.slice(0, i).join(" ").length;
-    const l2 = words.slice(i).join(" ").length;
-    const diff = Math.abs(l1 - l2);
-    if (diff < bestDiff){ bestDiff = diff; best = i; }
+    const candidate = cur + " " + words[i];
+    if (candidate.length <= threshold) cur = candidate;
+    else { lines.push(cur); cur = words[i]; }
   }
-  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+  lines.push(cur);
+  return lines;
 }
 /* All codes up to 4 chars share one uniform caplet width (as if every code
    were 4 chars) so e.g. EW7 and EW23 render the same size; only longer
