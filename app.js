@@ -3015,10 +3015,10 @@ JW3  Tukang              {proposed}
 JW2  Jurong Hill         {proposed}
 JW1  Jurong Pier         > CR21 {proposed}
 
-[wye end up] {proposed}
+[wye end up beyond any] {proposed}
 JN8  Choa Chu Kang       > NS4, BUS {proposed}
 
-[wye end down] {proposed}
+[wye end down beyond any] {proposed}
 JN9  Keat Hong           {proposed}
 JN10 Teck Whye           {proposed}
 JN11 Bukit Panjang       > DT1, BT9!, BP6*, BUS {proposed}`
