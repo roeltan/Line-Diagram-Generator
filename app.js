@@ -703,9 +703,29 @@ function racetrack(x0, y0, x1, y1, r, vertical){
      the curved caps entirely), so every station gets a clean axis-aligned
      normal. Also returns the true perimeter offset `t` for path-drawing. */
   function atStraight(s){
-    s = straightTotal ? ((s % straightTotal) + straightTotal) % straightTotal : 0;
+    if (straightTotal){
+      const wrapped = ((s % straightTotal) + straightTotal) % straightTotal;
+      /* A station meant to sit at the true far end of the *last* row (s a
+         positive exact multiple of straightTotal, e.g. a tightly-sized row
+         with no spare buffer at all) would otherwise wrap all the way back
+         down to 0 here — indistinguishable from the true start of the
+         *first* row, even though they're different physical points (the
+         near cap's own arc sits between them). Only a literal s=0 request
+         should resolve to the true start; anything that only reached 0 by
+         wrapping from a positive multiple belongs at the true end instead. */
+      s = (wrapped === 0 && s > 0) ? straightTotal : wrapped;
+    } else {
+      s = 0;
+    }
     for (const g of lineSegs){
-      if (s <= g.len || g === lineSegs[lineSegs.length-1]){
+      /* Strict "<" (not "<=") for every segment but the last: a station
+         landing exactly on a row's own far end needs to roll over onto the
+         START of the next row instead of staying pinned to the end of this
+         one — otherwise an even split (e.g. 8 stations, 4 apiece) comes out
+         5-and-3 instead, since the boundary station between the two rows
+         would land on the first row both times. The last segment keeps
+         "<=" as a fallback for s landing exactly on the full perimeter. */
+      if (s < g.len || g === lineSegs[lineSegs.length-1]){
         const u = g.len ? s / g.len : 0;
         return { x:g.ax + (g.bx-g.ax)*u, y:g.ay + (g.by-g.ay)*u, nx:g.nx, ny:g.ny, t:g.tStart + s };
       }
@@ -858,9 +878,6 @@ function buildDiagram(cfg){
   };
 
   if (cfg.layout === "loop"){
-    const n = Math.max(trunk.length, 2);
-    const gapUnits = trunk.length ? trunk.map((st, i) => gapAfter(i, true)) : [1, 1];
-    const totalUnits = gapUnits.reduce((a, u) => a + u, 0);
     /* r stays fixed at the pill's own radius (half the *base* height) even
        if the shape later grows taller — that's what turns a stadium/pill
        into a genuine rounded rect instead of just a bigger pill. Row length
@@ -868,6 +885,23 @@ function buildDiagram(cfg){
        before H is finalised. */
     const baseH = Math.max(sp * 2, 200);
     const r = baseH / 2;
+    /* Split the trunk into the two rows explicitly (the first/top row gets
+       the extra station on an odd count), then size each row from its own
+       actual station-to-station gaps, plus one small fixed buffer (well
+       under a full station-pitch) — enough breathing room for the station
+       nearest a corner not to sit exactly on the boundary between "this
+       row's own far end" and "the other row's own near end" (the shared
+       arc-length parameter both rows are placed on can't tell those two
+       apart otherwise, since it treats the curved cap connecting them as
+       contributing no length of its own), while still using far less
+       spare track than reserving a whole extra station-pitch per row did. */
+    const rowACount = Math.ceil(trunk.length / 2), rowBCount = trunk.length - rowACount;
+    const rowAUnits = []; for (let i = 0; i < rowACount - 1; i++) rowAUnits.push(gapAfter(i, false));
+    const rowBUnits = []; for (let i = rowACount; i < trunk.length - 1; i++) rowBUnits.push(gapAfter(i, false));
+    const rowAWidth = rowAUnits.reduce((a, u) => a + u, 0) * sp;
+    const rowBWidth = rowBUnits.reduce((a, u) => a + u, 0) * sp;
+    const capBuffer = Math.max(sp * 0.3, 15);
+    const rowLen = Math.max(rowAWidth, rowBWidth, sp) + capBuffer;
     /* "long" is the station-bearing axis (the loop's own reading direction),
        "short" is the other one — branch spacing governs it whenever a
        branch needs room to grow into the loop's interior. Which physical
@@ -875,18 +909,21 @@ function buildDiagram(cfg){
        run its long axis horizontally (the classic Circle Line shape) or
        vertically (stations down one side, up the other) — same geometry,
        just swapped. */
-    const long = (totalUnits * sp) / 2 + baseH;
+    const long = rowLen + baseH;
     const short = branches.length ? Math.max(baseH, 2 * branchGap) : baseH;
     const vertical = !!cfg.loopVertical;
     const W = vertical ? short : long;
     const H = vertical ? long : short;
     loopW = W;
-    const rowLen = long - 2 * r;           // station row length (both rows are equal)
-    const rowTotal = rowLen * 2;
-    const stepUnit = rowTotal / totalUnits;
-    const positions = [];
-    let cum = 0;
-    trunk.forEach((st, i) => { positions.push(cum); cum += gapUnits[i] * stepUnit; });
+    /* Each row's own stations are centred within its own rowLen — the
+       shorter row (on an odd count) ends up with a matching buffer split
+       evenly on both ends, so it reads as centred relative to the longer
+       row rather than pinned to one end of it. */
+    const rowAOffset = Math.max(0, (rowLen - rowAWidth) / 2);
+    const rowBOffset = Math.max(0, (rowLen - rowBWidth) / 2);
+    const positions = new Array(trunk.length);
+    { let cum = rowAOffset; for (let i = 0; i < rowACount; i++){ positions[i] = cum; if (i < rowAUnits.length) cum += rowAUnits[i] * sp; } }
+    { let cum = rowLen + rowBOffset; for (let i = rowACount; i < trunk.length; i++){ positions[i] = cum; const j = i - rowACount; if (j < rowBUnits.length) cum += rowBUnits[j] * sp; } }
 
     loop = racetrack(0, 0, W, H, r, vertical);
     /* No station sits on the semicircular end-caps, so nothing else would
@@ -3279,11 +3316,6 @@ function syncVisibility(){
   $("loopRotateField").style.display = l === "loop" ? "" : "none";
   $("trunkEndsContainer").style.display = l === "loop" ? "none" : "";
   $("trunkEndsSect").style.display = l === "loop" ? "none" : "";
-  /* Vertical trunk orientation isn't part of the v1 release (it's been
-     neglected relative to horizontal) — hidden for a straight trunk, but
-     still offered for a closed loop's own major axis, a separate, equally-
-     maintained setting under the same two buttons. */
-  $("orientationVerticalBtn").style.display = l === "loop" ? "" : "none";
   syncSpacingSlider();
   syncBranchSpacingSlider();
 }
