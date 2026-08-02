@@ -1459,8 +1459,21 @@ function buildDiagram(cfg){
                    stroke:colour, "stroke-width":STYLE.lineWidth }, gLines);
     }
     const alongFork = (d) => axisHoriz ? { x: forkOrigin.x + axisSgn * d, y: forkOrigin.y } : { x: forkOrigin.x, y: forkOrigin.y + axisSgn * d };
+    /* A point on the arm's own 45° diagonal ray, `dist` out from forkOrigin
+       in both the along- and across-axis (equal travel, true 45°) — as
+       opposed to rowPoint below, which is a point on the *flat row* past
+       the diagonal (fixed across-offset regardless of how far along). */
+    const diagPoint = (armSgn, dist) => across(alongFork(dist), armSgn * dist);
+    /* All three curves (trunk-to-A, trunk-to-B, A-to-B) meet right where
+       the trunk actually splits — hubR out from forkOrigin, noticeably
+       smaller than halfGap (the far corner where the diagonal straightens
+       into the row) but big enough that the curvature leaving forkOrigin
+       still reads clearly, not as a near-sharp kink. */
+    const hubR = Math.max(WYE_CORNER_R, sp * 0.4);
+    const vertexBack = showStub ? along(-hubR) : null;   // gives forkOrigin itself a real bend to round, instead of a raw sharp endpoint
 
     const corners = {};
+    const hubPts = {};
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
       if (!arm || !arm.stations.length) return;
@@ -1468,9 +1481,13 @@ function buildDiagram(cfg){
       const rowPoint = (alongDist) => across(alongFork(alongDist), armSgn * halfGap);
       const corner = rowPoint(halfGap);
       corners[armKey] = corner;
+      if (showStub) hubPts[armKey] = diagPoint(armSgn, hubR);
       const stationPts = arm.stations.map((st, i) => rowPoint(halfGap + postTurnBuf + i * sp));
       bb.add(corner.x, corner.y);
-      const d = roundedPath([[forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], WYE_CORNER_R);
+      const pathPts = showStub
+        ? [[vertexBack.x, vertexBack.y], [forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])]
+        : [[forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])];
+      const d = roundedPath(pathPts, WYE_CORNER_R);
       drawBranchLine(d, bc, false);
 
       const rowLabel = axisHoriz ? DIAG : (armSgn < 0 ? LEFT : RIGHT);
@@ -1482,16 +1499,18 @@ function buildDiagram(cfg){
       });
     });
 
-    if (showStub && corners.a && corners.b){
-      /* Tight, on purpose: this connects the same two corner points the
-         trunk-to-arm curves already round through, so it uses that same
-         small radius rather than reaching out as far as halfGap (which
-         reads as a big dome, not a tight triangular junction). */
-      const bulge = WYE_CORNER_R;
-      const ca = corners.a, cb = corners.b;
-      const c1 = axisHoriz ? { x: ca.x + axisSgn * bulge, y: ca.y } : { x: ca.x, y: ca.y + axisSgn * bulge };
-      const c2 = axisHoriz ? { x: cb.x + axisSgn * bulge, y: cb.y } : { x: cb.x, y: cb.y + axisSgn * bulge };
-      const d = `M ${F2(ca.x)} ${F2(ca.y)} C ${F2(c1.x)} ${F2(c1.y)}, ${F2(c2.x)} ${F2(c2.y)}, ${F2(cb.x)} ${F2(cb.y)}`;
+    if (showStub && hubPts.a && hubPts.b){
+      /* Connects the two arms right at the hub, not out at the far row
+         corners. A single control point centred on the trunk's own axis
+         (not one independently pushed out from each hub point) keeps this
+         a clean, symmetric arc — two independently-bulged control points
+         each drift toward their own arm's own heading and end up crossing
+         back over that same arm's trunk-to-arm curve, reading as a
+         pretzel instead of a triangle. */
+      const bulge = hubR * 0.7;
+      const ha = hubPts.a, hb = hubPts.b;
+      const mid = alongFork(hubR + bulge);
+      const d = `M ${F2(ha.x)} ${F2(ha.y)} Q ${F2(mid.x)} ${F2(mid.y)}, ${F2(hb.x)} ${F2(hb.y)}`;
       drawBranchLine(d, colour, false);
     }
   });
