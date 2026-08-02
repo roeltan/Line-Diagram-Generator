@@ -2384,7 +2384,7 @@ BP2  South View
 BP3  Keat Hong
 BP4  Teck Whye
 BP5  Phoenix
-BP6  Bukit Panjang       > DT1, BT9, BUS
+BP6  Bukit Panjang       > DT1*, BT9, BUS
 
 [loop at end]
 BP7  Petir
@@ -2411,24 +2411,24 @@ SE5  Ranggung
 [loop at end]
 SW1  Cheng Lim
 SW2  Farmway
-SW3  Kupang             > FV7 {proposed}
-SW4  Thanggam           > FV8 {proposed}
-SW5  Fernvale           > FV9 {proposed}
+SW3  Kupang             > FV7
+SW4  Thanggam           > FV8
+SW5  Fernvale           > FV9, ER13
 SW6  Layar
-SW7  Tongkang
+SW7  Tongkang           > ER12
 SW8  Renjong`
   },
   pglrt:{
     /* Another "bowtie" — East and West loops both hanging off the shared
        Punggol station, no tail. */
     name:"Punggol LRT", code:"PTC", colour:"#718573", layout:"horizontal", spacing:75, branchSpacing:60,
-    spec:`PTC  Punggol             > NE17, BUS
+    spec:`PTC  Punggol             > NE17, NC5, CP4(until:future), BUS
 
 [loop at start]
 PE1  Cove
 PE2  Meridian
 PE3  Coral Edge
-PE4  Riviera             > NC4*
+PE4  Riviera             > NC4*, CP3(until:future)
 PE5  Kadaloor
 PE6  Oasis
 PE7  Damai
@@ -2437,10 +2437,10 @@ PE7  Damai
 PW1  Sam Kee
 PW2  Teck Lee
 PW3  Punggol Point
-PW4  Samudera           > FV2 {proposed}
-PW5  Nibong             > FV3 {proposed}
-PW6  Sumang             > FV4 {proposed}
-PW7  Soo Teck           > FV5 {proposed}`
+PW4  Samudera           > FV2
+PW5  Nibong             > FV3
+PW6  Sumang             > FV4
+PW7  Soo Teck           > FV5`
   },
   fvlrt:{
     /* Fernvale LRT (RMP50 Doc. 50C) — a straight line, not a loop like the
@@ -2792,7 +2792,7 @@ JN8  Choa Chu Kang       > NS4, BUS {proposed}
 [wye end down] {proposed}
 JN9  Keat Hong           {proposed}
 JN10 Teck Whye           {proposed}
-JN11 Bukit Panjang       > DT9, BT9!, BP6*, BUS {proposed}`
+JN11 Bukit Panjang       > DT1, BT9!, BP6*, BUS {proposed}`
   },
   crl:{
     /* Cross Island Line — under construction. Phase 1 targeted 2030,
