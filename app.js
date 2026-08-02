@@ -1353,6 +1353,17 @@ function buildDiagram(cfg){
     const farApexPt = along(loopW);
     bb.add(farApexPt.x, farApexPt.y);   // the far cap's own apex — no station marks it, so the bbox needs telling directly
     extentPts.push(farApexPt);          // ...and it needs to count toward the left/right balancing below too, or that'll overcorrect
+    /* The two rows' own start/far corners bound the curve's full
+       perpendicular reach (±r) directly — relying on station positions to
+       do it instead falls apart the moment either row has no station on it
+       at all (an odd total, most commonly the single blank station a
+       fresh "Balloon loop" toggle starts with splits 1/0): with nothing
+       drawn on that empty row, nothing else ever tells the bbox it's
+       there, so the frame comes out too short on that side and the curve
+       ends up drawn past the edge, overlapping whatever sits just below
+       (typically the legend). */
+    bb.add(rowAStart.x, rowAStart.y); bb.add(rowAFar.x, rowAFar.y);
+    bb.add(rowBStart.x, rowBStart.y); bb.add(rowBFar.x, rowBFar.y);
 
     lp.stations.forEach((st, i) => {
       let p, onRowA;
@@ -1521,13 +1532,23 @@ function buildDiagram(cfg){
     const hubTangents = {};
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
-      if (!arm || !arm.stations.length) return;
-      const bc = arm.colour || colour;
+      if (!arm) return;
+      /* The corner is where this arm bends into its own row, whether or
+         not it has any stations on it yet — tracked in the bbox
+         unconditionally (not just once a station's own position happens
+         to reach past it), the same fix as the balloon loop's empty-row
+         case just below: an arm with no stations yet (e.g. right after
+         toggling to a wye, before its second arm gets any stations added)
+         would otherwise leave that whole side of the fork undrawn *and*
+         untracked, and the fork still visually reaches out to `corner`
+         either way once the OTHER arm has stations to anchor the curve. */
       const rowPoint = (alongDist) => across(alongFork(alongDist), armSgn * halfGap);
       const corner = rowPoint(smoothFork ? rowStartDist : halfGap);
       corners[armKey] = corner;
-      const stationPts = arm.stations.map((st, i) => rowPoint((smoothFork ? rowStartDist : halfGap) + (smoothFork ? rowPostBuf : postTurnBuf) + i * sp));
       bb.add(corner.x, corner.y);
+      if (!arm.stations.length) return;
+      const bc = arm.colour || colour;
+      const stationPts = arm.stations.map((st, i) => rowPoint((smoothFork ? rowStartDist : halfGap) + (smoothFork ? rowPostBuf : postTurnBuf) + i * sp));
 
       let d;
       if (smoothFork){
