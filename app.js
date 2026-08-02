@@ -358,6 +358,16 @@ function parseSpec(text){
         const at = wyeM[1].toLowerCase();
         const arm = /^(up|left)$/i.test(wyeM[2]) ? "a" : "b";
         let rest = wyeM[3];
+        let wy = wyes.find(w => w.at === at);
+        if (!wy){ wy = { at, a:null, b:null, line:i+1 }; wyes.push(wy); }
+        /* "beyond"/"any" describe the junction as a whole (where the fork
+           physically sits, and whether the two arms connect to each other
+           directly), not just this one header's own arm -- either header
+           setting them applies to both, since it's the same physical
+           junction either way. */
+        if (/\bbeyond\b/i.test(rest)) wy.forkBeyond = true;
+        if (/\bany\b/i.test(rest)) wy.anyToAny = true;
+        rest = rest.replace(/\b(beyond|any)\b/gi, "").replace(/\s+/g, " ").trim();
         let colour = null;
         const colonIdx = rest.indexOf(":");
         if (colonIdx >= 0){
@@ -365,8 +375,6 @@ function parseSpec(text){
           const cm = /(#[0-9a-fA-F]{3,8})\s*$/.exec(tail);
           if (cm) colour = cm[1];
         }
-        let wy = wyes.find(w => w.at === at);
-        if (!wy){ wy = { at, a:null, b:null, line:i+1 }; wyes.push(wy); }
         const armObj = { colour, tier:hdrTier, until:hdrUntil, stations:[], line:i+1 };
         wy[arm] = armObj;
         cursor = armObj.stations;
@@ -972,11 +980,12 @@ function buildDiagram(cfg){
       const jn = wy.at === "start" ? nodes[0] : nodes[trunkCount - 1];
       if (!jn) return;
       const axisSgn = wy.at === "start" ? -1 : 1;
+      const stubLen = (wy.anyToAny && wy.forkBeyond) ? sp * 0.8 : 0;
       [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
         const arm = wy[armKey];
         if (!arm || !arm.stations.length) return;
-        const nearX = jn.x + axisSgn * wyeHalfGap;
-        const farX  = jn.x + axisSgn * (wyeHalfGap + wyePostTurnBuf + (arm.stations.length - 1) * sp);
+        const nearX = jn.x + axisSgn * (stubLen + wyeHalfGap);
+        const farX  = jn.x + axisSgn * (stubLen + wyeHalfGap + wyePostTurnBuf + (arm.stations.length - 1) * sp);
         wyeArmSpans.push({ sgn: armSgn, xMin: Math.min(nearX, farX), xMax: Math.max(nearX, farX) });
       });
     });
@@ -1425,15 +1434,34 @@ function buildDiagram(cfg){
     const diagLen = halfGap * Math.SQRT2;
     const postTurnBuf = Math.max(diagLen, sp * 0.5, WYE_CORNER_R * 0.6) * 0.5;
 
+    /* Trunk-only vs any-to-any is the meaningful choice: a genuine wye lets
+       a train reach either arm directly from the other, not just from the
+       trunk, so any-to-any adds a third tight curve connecting the two
+       arms' own corners to each other, on top of the usual pair of
+       trunk-to-arm curves. Fork point (at the station vs a short stub
+       past it) only actually changes anything when any-to-any is also on
+       — for trunk-only, the service pattern is identical either way, so
+       there's nothing for a stub to usefully set apart; it's only drawn
+       once BOTH are true. */
+    const showStub = wy.anyToAny && wy.forkBeyond;
+    const forkOrigin = showStub ? along(sp * 0.8) : jn;
+    if (showStub){
+      el("path", { d:`M ${F2(jn.x)} ${F2(jn.y)} L ${F2(forkOrigin.x)} ${F2(forkOrigin.y)}`,
+                   stroke:colour, "stroke-width":STYLE.lineWidth }, gLines);
+    }
+    const alongFork = (d) => axisHoriz ? { x: forkOrigin.x + axisSgn * d, y: forkOrigin.y } : { x: forkOrigin.x, y: forkOrigin.y + axisSgn * d };
+
+    const corners = {};
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
       if (!arm || !arm.stations.length) return;
       const bc = arm.colour || colour;
-      const rowPoint = (alongDist) => across(along(alongDist), armSgn * halfGap);
+      const rowPoint = (alongDist) => across(alongFork(alongDist), armSgn * halfGap);
       const corner = rowPoint(halfGap);
+      corners[armKey] = corner;
       const stationPts = arm.stations.map((st, i) => rowPoint(halfGap + postTurnBuf + i * sp));
       bb.add(corner.x, corner.y);
-      const d = roundedPath([[jn.x, jn.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], WYE_CORNER_R);
+      const d = roundedPath([[forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])], WYE_CORNER_R);
       drawBranchLine(d, bc, false);
 
       const rowLabel = axisHoriz ? DIAG : (armSgn < 0 ? LEFT : RIGHT);
@@ -1444,6 +1472,15 @@ function buildDiagram(cfg){
         if (!axisHoriz) verticalLineXs.push(p.x);
       });
     });
+
+    if (showStub && corners.a && corners.b){
+      const bulge = halfGap;
+      const ca = corners.a, cb = corners.b;
+      const c1 = axisHoriz ? { x: ca.x + axisSgn * bulge, y: ca.y } : { x: ca.x, y: ca.y + axisSgn * bulge };
+      const c2 = axisHoriz ? { x: cb.x + axisSgn * bulge, y: cb.y } : { x: cb.x, y: cb.y + axisSgn * bulge };
+      const d = `M ${F2(ca.x)} ${F2(ca.y)} C ${F2(c1.x)} ${F2(c1.y)}, ${F2(c2.x)} ${F2(c2.y)}, ${F2(cb.x)} ${F2(cb.y)}`;
+      drawBranchLine(d, colour, false);
+    }
   });
 
   /* ---- labels + markers: the station-code caplet doubles as the marker ---- */
@@ -2980,6 +3017,8 @@ function wyeArmHeaderText(wy, armKey){
     : (armKey === "a" ? "up" : "down");
   const arm = wy[armKey];
   let s = `[wye ${wy.at || "end"} ${armWord}`;
+  if (wy.forkBeyond) s += ` beyond`;
+  if (wy.anyToAny) s += ` any`;
   if (arm.colour) s += `: ${arm.colour}`;
   s += "]";
   s += tagSuffix(arm.tier, false, arm.until);
@@ -3527,6 +3566,36 @@ function makeTrunkEndBlock(at){
     wrap.appendChild(makeStationGroupBlock(lp, { addLabel:"+ Add station to loop" }));
   } else if (type === "wye"){
     const wy = live.wyes.find(w => w.at === at);
+
+    /* Junction comes first: it's the choice that actually changes the
+       service pattern (can a train reach one arm directly from the
+       other, or only via the trunk). Fork point only matters once
+       any-to-any is on — for trunk-only, at-station vs past-station
+       draws the exact same connectivity either way, so there's nothing
+       meaningful for it to set apart and it stays hidden. */
+    const junctionSel = document.createElement("select");
+    junctionSel.className = "brDir";
+    junctionSel.title = "Trunk only: each arm only reaches the trunk, same as an ordinary wye. Any-to-any: a train can also reach one arm directly from the other, like a real triangular wye junction.";
+    junctionSel.innerHTML = `<option value="trunk">Trunk only</option><option value="any">Any-to-any</option>`;
+    junctionSel.value = wy.anyToAny ? "any" : "trunk";
+    junctionSel.onchange = () => {
+      wy.anyToAny = junctionSel.value === "any";
+      syncTextFromLive(); renderTrunkEnds(); render();
+    };
+    topRow.appendChild(branchFieldLabel("Junction"));
+    topRow.appendChild(junctionSel);
+
+    if (wy.anyToAny){
+      const forkSel = document.createElement("select");
+      forkSel.className = "brDir";
+      forkSel.title = "Where the two arms actually diverge relative to the terminal station";
+      forkSel.innerHTML = `<option value="at">At station</option><option value="beyond">Past station</option>`;
+      forkSel.value = wy.forkBeyond ? "beyond" : "at";
+      forkSel.onchange = () => { wy.forkBeyond = forkSel.value === "beyond"; syncTextFromLive(); render(); };
+      topRow.appendChild(branchFieldLabel("Fork point"));
+      topRow.appendChild(forkSel);
+    }
+
     ["a", "b"].forEach(armKey => {
       const armWord = wyeArmLabel(armKey);
       wrap.appendChild(makeStationGroupBlock(wy[armKey], { label:armWord, addLabel:`+ Add station to ${armWord.toLowerCase()} arm` }));
