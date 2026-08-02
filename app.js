@@ -1468,13 +1468,11 @@ function buildDiagram(cfg){
        past the station (smooth, plus the third curve, both riding on the
        real stub). */
     const forkOrigin = showStub ? along(sp * 0.8) : jn;
-    /* No separate stub path drawn here — each arm's own rounded path below
-       already starts at jn and only bends away once it nears forkOrigin
-       (see vertexBack), so the straight jn-to-forkOrigin stretch is
-       already fully covered (twice over, once per arm, harmlessly
-       overlapping). A separate full-length straight stub drawn on top of
-       that would keep going straight right where the arms' own curves
-       have already started bending away, poking out past them. */
+    /* Each arm's own path below draws its own jn-to-forkOrigin lead-in
+       explicitly (see the leadIn logic further down) rather than relying on
+       roundedPath/a separate stub, since the S-curve itself only ever runs
+       forward from forkOrigin and can't be relied on to cover that stretch
+       on its own. */
     const alongFork = (d) => axisHoriz ? { x: forkOrigin.x + axisSgn * d, y: forkOrigin.y } : { x: forkOrigin.x, y: forkOrigin.y + axisSgn * d };
     /* Point on a cubic bezier at parameter t (0-1) — used to anchor the
        any-to-any connecting curve to a point that's actually *on* the arm's
@@ -1487,11 +1485,24 @@ function buildDiagram(cfg){
         y: mt*mt*mt*p0.y + 3*mt*mt*t*p1.y + 3*mt*t*t*p2.y + t*t*t*p3.y,
       };
     };
+    /* Tangent (derivative) of that same cubic bezier at parameter t — used
+       so the any-to-any connecting curve can match each arm's *actual*
+       curve direction at the hub point instead of assuming both hubs sit
+       on straight rays through forkOrigin (only true back when the arms
+       were plain 45° diagonals; the S-curve bends, so that assumption no
+       longer holds). */
+    const bezierTangent = (p0, p1, p2, p3, t) => {
+      const mt = 1 - t;
+      return {
+        x: 3*mt*mt*(p1.x-p0.x) + 6*mt*t*(p2.x-p1.x) + 3*t*t*(p3.x-p2.x),
+        y: 3*mt*mt*(p1.y-p0.y) + 6*mt*t*(p2.y-p1.y) + 3*t*t*(p3.y-p2.y),
+      };
+    };
     /* The any-to-any connecting curve anchors close to the fork — hubR
        distance in from forkOrigin along the S-curve's own parameter,
        noticeably smaller than halfGap (the far corner where the curve
        straightens into the row). */
-    const hubR = Math.max(WYE_CORNER_R * 0.5, sp * 0.18);
+    const hubR = Math.max(WYE_CORNER_R * 0.75, sp * 0.28);
     /* The smooth curve gets to run further out than the sharp diagonal
        does (past halfGap, not stopping at it) — postTurnBuf shrinks by
        that same extra amount so the first station doesn't actually move,
@@ -1511,6 +1522,7 @@ function buildDiagram(cfg){
 
     const corners = {};
     const hubPts = {};
+    const hubTangents = {};
     [["a", -1], ["b", 1]].forEach(([armKey, armSgn]) => {
       const arm = wy[armKey];
       if (!arm || !arm.stations.length) return;
@@ -1538,8 +1550,24 @@ function buildDiagram(cfg){
         const mid = curveInset + (rowStartDist - curveInset) * 0.5;
         const c1 = alongFork(mid);
         const c2 = rowPoint(mid);
-        if (showStub) hubPts[armKey] = bezierPoint(curveStart, c1, c2, corner, Math.min(1, hubR / (rowStartDist - curveInset)));
-        d = (curveInset ? `M ${F2(forkOrigin.x)} ${F2(forkOrigin.y)} L ${F2(curveStart.x)} ${F2(curveStart.y)} ` : `M ${F2(curveStart.x)} ${F2(curveStart.y)} `) +
+        if (showStub){
+          const t = Math.min(1, hubR / (rowStartDist - curveInset));
+          hubPts[armKey] = bezierPoint(curveStart, c1, c2, corner, t);
+          hubTangents[armKey] = bezierTangent(curveStart, c1, c2, corner, t);
+        }
+        /* Lead-in: draw the real straight stretch from jn up to wherever
+           the curve itself actually starts (forkOrigin for any-to-any —
+           since jn and forkOrigin differ there — then, separately, the
+           trunk-only inset past forkOrigin, if any). Written as two
+           independent "does this segment have nonzero length" checks
+           (reference equality — forkOrigin IS jn's own reference when
+           there's no stub, and curveStart IS forkOrigin's own reference
+           when there's no inset) since at most one is ever active for a
+           given wy. */
+        let leadIn = `M ${F2(jn.x)} ${F2(jn.y)} `;
+        if (forkOrigin !== jn) leadIn += `L ${F2(forkOrigin.x)} ${F2(forkOrigin.y)} `;
+        if (curveStart !== forkOrigin) leadIn += `L ${F2(curveStart.x)} ${F2(curveStart.y)} `;
+        d = leadIn +
             `C ${F2(c1.x)} ${F2(c1.y)}, ${F2(c2.x)} ${F2(c2.y)}, ${F2(corner.x)} ${F2(corner.y)}` +
             stationPts.map(p => ` L ${F2(p.x)} ${F2(p.y)}`).join("");
       } else {
@@ -1557,16 +1585,25 @@ function buildDiagram(cfg){
     });
 
     if (showStub && hubPts.a && hubPts.b){
-      /* Connects the two arms right at the hub — using forkOrigin itself
-         as the quadratic's one control point, not an arbitrary offset
-         point. Both arms' own 45° diagonals pass through forkOrigin, so
-         a quadratic bezier control point placed exactly there makes the
-         curve's tangent at each hub point fall exactly along that arm's
-         own diagonal (a quadratic's tangent at an endpoint always points
-         straight at the control point) — the curve leaves each arm's own
-         line seamlessly instead of meeting it at a visible kink. */
-      const ha = hubPts.a, hb = hubPts.b;
-      const d = `M ${F2(ha.x)} ${F2(ha.y)} Q ${F2(forkOrigin.x)} ${F2(forkOrigin.y)}, ${F2(hb.x)} ${F2(hb.y)}`;
+      /* Connects the two arms right at the hub. Each arm's S-curve bends
+         (unlike the old plain 45° diagonal), so a single shared control
+         point can no longer be tangent to both at once — instead, build a
+         proper cubic whose own two control points each sit out along that
+         arm's *actual* tangent direction at its hub point (from
+         bezierTangent), one reach-length back toward the fork from each
+         hub point (both pulled the *same* relative way — backward along
+         their own forward tangent — not one forward and one back, which
+         would break the up/down mirror symmetry the two arms otherwise
+         share around the trunk's own axis). Tucking both control points
+         in toward the fork this way (rather than out past the hubs) also
+         keeps the curve close to forkOrigin, echoing where the old
+         shared-control-point version sat. */
+      const ha = hubPts.a, hb = hubPts.b, ta = hubTangents.a, tb = hubTangents.b;
+      const na = Math.hypot(ta.x, ta.y) || 1, nb = Math.hypot(tb.x, tb.y) || 1;
+      const reach = Math.hypot(hb.x - ha.x, hb.y - ha.y) * 0.35;
+      const c1 = { x: ha.x - (ta.x / na) * reach, y: ha.y - (ta.y / na) * reach };
+      const c2 = { x: hb.x - (tb.x / nb) * reach, y: hb.y - (tb.y / nb) * reach };
+      const d = `M ${F2(ha.x)} ${F2(ha.y)} C ${F2(c1.x)} ${F2(c1.y)}, ${F2(c2.x)} ${F2(c2.y)}, ${F2(hb.x)} ${F2(hb.y)}`;
       drawBranchLine(d, colour, false);
     }
   });
