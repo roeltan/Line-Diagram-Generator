@@ -134,8 +134,16 @@
       <label class="chk"><input type="checkbox" id="showCodes" checked> Show station codes</label>
       <label class="chk"><input type="checkbox" id="showIc" checked> Show interchange codes</label>
       <label class="chk"><input type="checkbox" id="showBus" checked> Show bus interchanges</label>
-      <label class="chk"><input type="checkbox" id="showSir" checked> Show SIR express stops</label>
     </div>
+    <div class="field">
+      <label>SIR express stops</label>
+      <div class="spacingRow" id="sirStyleRow">
+        <button type="button" class="spacingBtn" data-value="none">None</button>
+        <button type="button" class="spacingBtn" data-value="outline">Outlined caplet</button>
+        <button type="button" class="spacingBtn" data-value="underline">Underlined text</button>
+      </div>
+    </div>
+    <input type="hidden" id="sirStyle" value="outline">
 
     <div class="subsect">Extras</div>
     <div class="checks">

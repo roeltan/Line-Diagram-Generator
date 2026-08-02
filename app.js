@@ -1761,9 +1761,11 @@ function buildDiagram(cfg){
         run.forEach((s, i) => {
           el("rect", { x:F2(s.x0), y:F2(y0), width:F2(s.x1-s.x0), height:F2(h), fill:s.cd.c }, grp);
           if (i > 0) el("rect", { x:F2(s.x0-.75), y:F2(y0), width:1.5, height:F2(h), fill:bgColour }, grp);
+          const isSir = (runIdx === 0 && i === 0 && n.sir) || s.cd.sir;
           const tx = el("text", { x:F2((s.x0+s.x1)/2), y:F2(n.y+3.9), "text-anchor":"middle",
                                   "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(s.cd.c),
-                                  "letter-spacing":".3" }, gLabels);
+                                  "letter-spacing":".3",
+                                  "text-decoration": (cfg.sirStyle === "underline" && isSir) ? "underline" : null }, gLabels);
           setCodeText(tx, s.cd.t, STYLE.codeSize);
         });
         el("path", { d:capletPath(rx0, y0, rx1-rx0, h), fill:"none",
@@ -1814,13 +1816,15 @@ function buildDiagram(cfg){
       placed.forEach((p, idx) => {
         const { cd, w, cy } = p;
         const cx = n.x;
+        const isSir = (idx === 0 && n.sir) || cd.sir;
         if (idx === 0) ownCapletBox = { x:n.x - w/2, y:cy - h/2, w, h };
-        if ((idx === 0 && n.sir) || cd.sir) sirBoxes.push({ x:n.x - w/2, y:cy - h/2, w, h });
+        if (isSir) sirBoxes.push({ x:n.x - w/2, y:cy - h/2, w, h });
         el("path", { d:capletPath(cx - w/2, cy - h/2, w, h),
                      fill:cd.c, stroke:bgColour, "stroke-width":STYLE.capletOutlineW }, gLabels);
         const tx = el("text", { x:F2(cx), y:F2(cy + 3.9), "text-anchor":"middle",
                                 "font-size":STYLE.codeSize, "font-weight":700, fill:contrastText(cd.c),
-                                "letter-spacing":".3" }, gLabels);
+                                "letter-spacing":".3",
+                                "text-decoration": (cfg.sirStyle === "underline" && isSir) ? "underline" : null }, gLabels);
         setCodeText(tx, cd.t, STYLE.codeSize);
         bb.rect(cx - w/2 - 1, cy - h/2 - 1, w + 2, h + 2);
       });
@@ -1834,13 +1838,16 @@ function buildDiagram(cfg){
       farEdge = edge;
     }
 
-    /* SIR express-service stop — a dark outline ring around a caplet,
-       echoing the emphasis used for interchanges on some overseas metro
-       maps but repurposed here to flag express stops instead. Rings the
-       station's own caplet (station tagged {sir}) and/or any individual
-       interchange caplet tagged with a trailing `!` (e.g. `NC8!`) — a
-       station can have either, both, or neither independently. */
-    if (cfg.showSir && sirBoxes.length){
+    /* SIR express-service stop — three display styles: none, a dark
+       outline ring around a caplet (echoing the emphasis used for
+       interchanges on some overseas metro maps but repurposed here to
+       flag express stops instead), or an underline on the caplet's own
+       text (added directly at each code's own <text> element above).
+       Rings/underlines the station's own caplet (station tagged {sir})
+       and/or any individual interchange caplet tagged with a trailing
+       `!` (e.g. `NC8!`) — a station can have either, both, or neither
+       independently. */
+    if (cfg.sirStyle === "outline" && sirBoxes.length){
       const pad = STYLE.sirPad;
       const sirW = STYLE.capletOutlineW;
       const sirColour = cfg.dark ? "#e8eaed" : STYLE.sirOutlineColour;
@@ -2088,7 +2095,7 @@ const $ = id => document.getElementById(id);
 const S = {
   spec:$("spec"), name:$("lineName"), code:$("lineCode"), colour:$("lineColor"),
   hex:$("colorHex"), layout:$("layout"), spacing:$("spacing"), branchSpacing:$("branchSpacing"),
-  closed:$("closed"), loopVertical:$("loopVertical"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"), showSir:$("showSir"),
+  closed:$("closed"), loopVertical:$("loopVertical"), showCodes:$("showCodes"), showIc:$("showIc"), showBus:$("showBus"), sirStyle:$("sirStyle"),
   showBadge:$("showBadge"), showLegend:$("showLegend"), showAccent:$("showAccent"), opaque:$("opaque")
 };
 let zoom = 1, current = null;
@@ -3260,7 +3267,7 @@ function readForm(){
     spacing:parseInt(S.spacing.value, 10) || 100,
     branchSpacing:parseInt(S.branchSpacing.value, 10) || 120,
     closed:S.closed.checked, loopVertical:S.loopVertical.checked, showCodes:S.showCodes.checked, showIc:S.showIc.checked,
-    showBus:S.showBus.checked, showSir:S.showSir.checked,
+    showBus:S.showBus.checked, sirStyle:S.sirStyle.value || "outline",
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked,
     dark: diagramDark,
@@ -3284,7 +3291,12 @@ function applyConfig(c){
   S.showCodes.checked = c.showCodes !== false;
   S.showIc.checked = c.showIc !== false;
   S.showBus.checked = c.showBus !== false;
-  S.showSir.checked = c.showSir !== false;
+  /* sirStyle is the current field; showSir (a plain boolean) is the old
+     one, still readable from a save/config made before this became a
+     3-way choice — false meant "off" (now "none"), true/absent meant the
+     only style that existed then (now "outline"). */
+  S.sirStyle.value = c.sirStyle || (c.showSir === false ? "none" : "outline");
+  syncSirStyleButtons();
   S.showBadge.checked = c.showBadge !== false;
   S.showLegend.checked = c.showLegend !== false;
   S.showAccent.checked = c.showAccent !== false;
@@ -4075,7 +4087,7 @@ function snapshotConfig(){
   return {
     name:S.name.value, code:S.code.value, colour:S.colour.value, layout:S.layout.value,
     spacing:S.spacing.value, branchSpacing:S.branchSpacing.value, closed:S.closed.checked, loopVertical:S.loopVertical.checked,
-    showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked, showSir:S.showSir.checked,
+    showCodes:S.showCodes.checked, showIc:S.showIc.checked, showBus:S.showBus.checked, sirStyle:S.sirStyle.value || "outline",
     showBadge:S.showBadge.checked, showLegend:S.showLegend.checked, showAccent:S.showAccent.checked,
     opaque:S.opaque.checked, dark:diagramDark, spec:S.spec.value,
     lineInfo:lineInfoDiff(), lineOrder:lineOrder
@@ -4157,7 +4169,7 @@ SWATCHES.forEach(c => {
 });
 
 ["input", "change"].forEach(ev => {
-  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBus, S.showSir, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
+  [S.name, S.code, S.spec, S.showCodes, S.showIc, S.showBus, S.showBadge, S.showLegend, S.showAccent, S.opaque, S.closed]
     .forEach(n => n.addEventListener(ev, render));
 });
 S.spacing.addEventListener("input", () => { $("spacingVal").textContent = S.spacing.value; render(); });
@@ -4221,6 +4233,19 @@ document.querySelectorAll("#orientationRow .spacingBtn").forEach(b => {
     } else {
       setLayout(b.dataset.value);
     }
+  };
+});
+
+function syncSirStyleButtons(){
+  document.querySelectorAll("#sirStyleRow .spacingBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.value === (S.sirStyle.value || "outline"));
+  });
+}
+document.querySelectorAll("#sirStyleRow .spacingBtn").forEach(b => {
+  b.onclick = () => {
+    S.sirStyle.value = b.dataset.value;
+    syncSirStyleButtons();
+    render();
   };
 });
 
