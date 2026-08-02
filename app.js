@@ -1399,20 +1399,25 @@ function buildDiagram(cfg){
 
     /* Fork point only actually changes anything once any-to-any is also
        on — see the fuller explanation below, right where it's used to
-       decide the stub. Needed here too: once there's a real stub, the
-       terminal station itself sits apart from the fork/triangle shape
-       (out along the stub, not touching it), so it no longer needs to
-       dodge those curves — its name can go back to a normal terminus
-       label instead of being forced to the side. */
+       decide the stub. showStub/smoothFork are needed here too: once
+       either gives the trunk-to-arm curves real room to bend near the
+       junction (a real stub for any-to-any-past-station, or the bigger
+       synthetic reach for trunk-only), the terminal station itself no
+       longer sits jammed right up against the curves — its name can go
+       back to a normal terminus label instead of being forced to the
+       side to dodge them. Only any-to-any-at-station keeps the original
+       sharp, close-in fork, so only it still needs the side-forced
+       label. */
     const showStub = wy.anyToAny && wy.forkBeyond;
+    const smoothFork = !wy.anyToAny || wy.forkBeyond;
 
     /* a wye only ever sits at a trunk terminus (never mid-trunk), so once
        both arms exist there's nowhere left but the side — same LOOP_LEFT/
        LOOP_RIGHT move an ordinary branch pair gets at a terminus junction,
        above (codes still grow straight down, unlike a genuine vertical-
        layout branch station's sideways-growing LEFT/RIGHT). Skipped once
-       there's a real stub (see above). */
-    if (axisHoriz && !showStub){
+       the curves have real room to bend (see above). */
+    if (axisHoriz && !smoothFork){
       const jnIdx = wy.at === "start" ? 0 : trunkCount - 1;
       const dirs = junctionDirs.get(jnIdx);
       if (dirs && dirs.up && dirs.down) jn.label = (wy.at === "start") ? LOOP_LEFT : LOOP_RIGHT;
@@ -1452,7 +1457,16 @@ function buildDiagram(cfg){
        past it) only actually changes anything when any-to-any is also on
        — for trunk-only, the service pattern is identical either way, so
        there's nothing for a stub to usefully set apart; it's only drawn
-       once BOTH are true (showStub, computed above). */
+       once BOTH are true (showStub, computed above).
+
+       Three geometries fall out of these two switches (smoothFork,
+       computed above): trunk-only (always smooth, no third curve —
+       there's no stub to make "past station" mean anything, so it's just
+       smooth-at-the-station-throughout), any-to-any at the station (the
+       original sharp 45° diagonal, kept as-is — no stub means no room for
+       the triangle to read as distinct from a plain fork), and any-to-any
+       past the station (smooth, plus the third curve, both riding on the
+       real stub). */
     const forkOrigin = showStub ? along(sp * 0.8) : jn;
     /* No separate stub path drawn here — each arm's own rounded path below
        already starts at jn and only bends away once it nears forkOrigin
@@ -1473,12 +1487,17 @@ function buildDiagram(cfg){
        into the row) but big enough that the curvature leaving forkOrigin
        still reads clearly, not as a near-sharp kink. */
     const hubR = Math.max(WYE_CORNER_R * 0.5, sp * 0.18);
-    /* jn itself (not a synthetic point further back) is the right "coming
-       from" reference for rounding forkOrigin — it's already exactly
-       where the stub's own straight line starts, so the bend blends
-       smoothly into the real approach direction instead of introducing
-       a second, disconnected kink of its own. */
-    const vertexBack = showStub ? jn : null;
+    /* Trunk-only has no real stub to lean on (forkOrigin === jn), so the
+       "coming from" reference is a synthetic point back along the trunk's
+       own axis instead — reaching noticeably further out than hubR (which
+       is sized for the any-to-any hub points, tucked in close to the
+       triangle) and rounded with a correspondingly bigger radius, so the
+       bend actually clears the station's own caplet instead of hiding
+       underneath it. Any-to-any-past-station already has a real stub of
+       its own to lean on (jn), long enough that this doesn't apply there. */
+    const trunkOnlyReach = Math.max(WYE_CORNER_R * 1.4, sp * 0.4);
+    const forkRadius = (!wy.anyToAny) ? trunkOnlyReach : WYE_CORNER_R;
+    const vertexBack = !smoothFork ? null : (showStub ? jn : alongFork(-trunkOnlyReach));
 
     const corners = {};
     const hubPts = {};
@@ -1492,10 +1511,10 @@ function buildDiagram(cfg){
       if (showStub) hubPts[armKey] = diagPoint(armSgn, hubR);
       const stationPts = arm.stations.map((st, i) => rowPoint(halfGap + postTurnBuf + i * sp));
       bb.add(corner.x, corner.y);
-      const pathPts = showStub
+      const pathPts = smoothFork
         ? [[vertexBack.x, vertexBack.y], [forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])]
         : [[forkOrigin.x, forkOrigin.y], [corner.x, corner.y], ...stationPts.map(p => [p.x, p.y])];
-      const d = roundedPath(pathPts, WYE_CORNER_R);
+      const d = roundedPath(pathPts, forkRadius);
       drawBranchLine(d, bc, false);
 
       const rowLabel = axisHoriz ? DIAG : (armSgn < 0 ? LEFT : RIGHT);
